@@ -1,1434 +1,535 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Monad Testnet Sybil Checker</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/web3/1.8.0/web3.min.js"></script>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: #0a0a0a;
-            color: #ffffff;
-            overflow-x: hidden;
-            position: relative;
-        }
-
-        /* Animated Background */
-        .background {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: -1;
-            background: radial-gradient(circle at 20% 50%, rgba(120, 119, 198, 0.1) 0%, transparent 50%),
-                        radial-gradient(circle at 80% 20%, rgba(255, 103, 89, 0.1) 0%, transparent 50%),
-                        radial-gradient(circle at 40% 80%, rgba(120, 200, 255, 0.1) 0%, transparent 50%);
-            animation: backgroundShift 20s ease-in-out infinite;
-        }
-
-        @keyframes backgroundShift {
-            0%, 100% {
-                background: radial-gradient(circle at 20% 50%, rgba(120, 119, 198, 0.1) 0%, transparent 50%),
-                            radial-gradient(circle at 80% 20%, rgba(255, 103, 89, 0.1) 0%, transparent 50%),
-                            radial-gradient(circle at 40% 80%, rgba(120, 200, 255, 0.1) 0%, transparent 50%);
-            }
-            50% {
-                background: radial-gradient(circle at 60% 70%, rgba(120, 119, 198, 0.15) 0%, transparent 50%),
-                            radial-gradient(circle at 30% 40%, rgba(255, 103, 89, 0.15) 0%, transparent 50%),
-                            radial-gradient(circle at 90% 30%, rgba(120, 200, 255, 0.15) 0%, transparent 50%);
-            }
-        }
-
-        .particles {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: -1;
-        }
-
-        .particle {
-            position: absolute;
-            width: 2px;
-            height: 2px;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 50%;
-            animation: float 15s infinite linear;
-        }
-
-        @keyframes float {
-            0% {
-                transform: translateY(100vh) translateX(0px);
-                opacity: 0;
-            }
-            10% {
-                opacity: 1;
-            }
-            90% {
-                opacity: 1;
-            }
-            100% {
-                transform: translateY(-10vh) translateX(100px);
-                opacity: 0;
-            }
-        }
-
-        /* Header */
-        .header {
-            padding: 20px 40px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            background: rgba(10, 10, 10, 0.8);
-            position: sticky;
-            top: 0;
-            z-index: 100;
-        }
-
-        .nav {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .logo {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            font-size: 24px;
-            font-weight: bold;
-            color: #7877c6;
-        }
-
-        .nav-links {
-            display: flex;
-            gap: 30px;
-        }
-
-        .nav-link {
-            color: rgba(255, 255, 255, 0.7);
-            text-decoration: none;
-            font-weight: 500;
-            transition: color 0.3s;
-        }
-
-        .nav-link:hover {
-            color: #7877c6;
-        }
-
-        .stats-bar {
-            display: flex;
-            gap: 20px;
-            font-size: 12px;
-            color: rgba(255, 255, 255, 0.5);
-        }
-
-        .network-status {
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }
-
-        .status-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: #4caf50;
-            animation: pulse 2s infinite;
-        }
-
-        .status-dot.offline {
-            background: #ff6759;
-        }
-
-        @keyframes pulse {
-            0% { opacity: 1; }
-            50% { opacity: 0.5; }
-            100% { opacity: 1; }
-        }
-
-        /* Main Content */
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-            padding: 40px 20px;
-        }
-
-        .search-section {
-            text-align: center;
-            margin-bottom: 50px;
-        }
-
-        .search-title {
-            font-size: 48px;
-            font-weight: 700;
-            margin-bottom: 10px;
-            background: linear-gradient(135deg, #7877c6, #ff6759);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-
-        .search-subtitle {
-            font-size: 18px;
-            color: rgba(255, 255, 255, 0.6);
-            margin-bottom: 40px;
-        }
-
-        .search-container {
-            max-width: 600px;
-            margin: 0 auto;
-            position: relative;
-        }
-
-        .search-input {
-            width: 100%;
-            padding: 20px 25px;
-            font-size: 16px;
-            background: rgba(255, 255, 255, 0.05);
-            border: 2px solid rgba(255, 255, 255, 0.1);
-            border-radius: 12px;
-            color: #ffffff;
-            outline: none;
-            transition: all 0.3s;
-            backdrop-filter: blur(10px);
-        }
-
-        .search-input:focus {
-            border-color: #7877c6;
-            box-shadow: 0 0 20px rgba(120, 119, 198, 0.3);
-        }
-
-        .search-btn {
-            position: absolute;
-            right: 5px;
-            top: 5px;
-            bottom: 5px;
-            padding: 0 25px;
-            background: linear-gradient(135deg, #7877c6, #ff6759);
-            border: none;
-            border-radius: 8px;
-            color: white;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s;
-            disabled: false;
-        }
-
-        .search-btn:hover:not(:disabled) {
-            transform: translateY(-1px);
-            box-shadow: 0 5px 15px rgba(120, 119, 198, 0.4);
-        }
-
-        .search-btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        /* Results Section */
-        .results-section {
-            display: none;
-            grid-template-columns: 1fr 400px;
-            gap: 30px;
-            margin-top: 40px;
-        }
-
-        .main-results {
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 16px;
-            padding: 30px;
-            backdrop-filter: blur(10px);
-        }
-
-        .sidebar {
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
-        }
-
-        .card {
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 16px;
-            padding: 25px;
-            backdrop-filter: blur(10px);
-        }
-
-        .card-title {
-            font-size: 18px;
-            font-weight: 600;
-            margin-bottom: 15px;
-            color: #7877c6;
-        }
-
-        .address-info {
-            margin-bottom: 30px;
-        }
-
-        .address-display {
-            font-family: 'Courier New', monospace;
-            font-size: 14px;
-            background: rgba(0, 0, 0, 0.3);
-            padding: 15px;
-            border-radius: 8px;
-            word-break: break-all;
-            border-left: 3px solid #7877c6;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .copy-btn {
-            background: rgba(120, 119, 198, 0.2);
-            border: 1px solid #7877c6;
-            color: #7877c6;
-            padding: 5px 10px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 12px;
-            transition: all 0.3s;
-        }
-
-        .copy-btn:hover {
-            background: rgba(120, 119, 198, 0.3);
-        }
-
-        .risk-score {
-            text-align: center;
-            margin-bottom: 30px;
-        }
-
-        .risk-circle {
-            width: 120px;
-            height: 120px;
-            margin: 0 auto 15px;
-            position: relative;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .risk-circle::before {
-            content: '';
-            width: 90px;
-            height: 90px;
-            background: #0a0a0a;
-            border-radius: 50%;
-            position: absolute;
-        }
-
-        .risk-value {
-            font-size: 24px;
-            font-weight: bold;
-            z-index: 1;
-            position: relative;
-        }
-
-        .risk-label {
-            font-size: 16px;
-            color: rgba(255, 255, 255, 0.7);
-        }
-
-        .metrics-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 15px;
-            margin-bottom: 30px;
-        }
-
-        .metric {
-            text-align: center;
-            padding: 15px;
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 8px;
-        }
-
-        .metric-value {
-            font-size: 20px;
-            font-weight: bold;
-            color: #7877c6;
-        }
-
-        .metric-label {
-            font-size: 12px;
-            color: rgba(255, 255, 255, 0.6);
-            margin-top: 5px;
-        }
-
-        .chart-container {
-            margin-top: 30px;
-            height: 300px;
-        }
-
-        .transactions-list {
-            max-height: 300px;
-            overflow-y: auto;
-        }
-
-        .transaction-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 12px 0;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-            font-size: 12px;
-        }
-
-        .tx-hash {
-            font-family: 'Courier New', monospace;
-            color: #7877c6;
-            cursor: pointer;
-            transition: color 0.3s;
-        }
-
-        .tx-hash:hover {
-            color: #ff6759;
-        }
-
-        .tx-details {
-            display: flex;
-            flex-direction: column;
-            align-items: flex-end;
-            gap: 2px;
-        }
-
-        .tx-value {
-            color: #4caf50;
-            font-weight: 500;
-        }
-
-        .tx-time {
-            color: rgba(255, 255, 255, 0.5);
-            font-size: 10px;
-        }
-
-        .loading {
-            text-align: center;
-            padding: 40px;
-            color: rgba(255, 255, 255, 0.6);
-        }
-
-        .spinner {
-            border: 3px solid rgba(255, 255, 255, 0.1);
-            border-radius: 50%;
-            border-top: 3px solid #7877c6;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 20px;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        .alert {
-            margin-top: 20px;
-            padding: 15px;
-            border-radius: 8px;
-            background: rgba(255, 103, 89, 0.1);
-            border: 1px solid rgba(255, 103, 89, 0.3);
-            color: #ff6759;
-        }
-
-        .success {
-            background: rgba(76, 175, 80, 0.1);
-            border: 1px solid rgba(76, 175, 80, 0.3);
-            color: #4caf50;
-        }
-
-        .warning {
-            background: rgba(255, 235, 59, 0.1);
-            border: 1px solid rgba(255, 235, 59, 0.3);
-            color: #ffeb3b;
-        }
-
-        .risk-factor {
-            padding: 8px 0;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .risk-factor:last-child {
-            border-bottom: none;
-        }
-
-        .risk-indicator {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            margin-right: 10px;
-        }
-
-        .risk-high { background: #ff6759; }
-        .risk-medium { background: #ffeb3b; }
-        .risk-low { background: #4caf50; }
-        .risk-info { background: #7877c6; }
-
-        .footer {
-            text-align: center;
-            padding: 40px;
-            border-top: 1px solid rgba(255, 255, 255, 0.1);
-            color: rgba(255, 255, 255, 0.5);
-            font-size: 14px;
-            margin-top: 60px;
-        }
-
-        .footer a {
-            color: #7877c6;
-            text-decoration: none;
-        }
-
-        .explorer-link {
-            color: #7877c6;
-            text-decoration: none;
-            font-size: 12px;
-            margin-left: 10px;
-        }
-
-        .explorer-link:hover {
-            color: #ff6759;
-        }
-
-        @media (max-width: 768px) {
-            .results-section {
-                grid-template-columns: 1fr;
-            }
-            
-            .nav {
-                flex-direction: column;
-                gap: 20px;
-            }
-            
-            .search-title {
-                font-size: 32px;
-            }
-            
-            .container {
-                padding: 20px 10px;
-            }
-
-            .metrics-grid {
-                grid-template-columns: 1fr;
-            }
-
-            .stats-bar {
-                flex-direction: column;
-                gap: 10px;
-            }
-        }
-    </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Sybil Checker — MONAD Testnet</title>
+<meta name="description" content="On-chain Sybil risk scanner for the MONAD testnet. Paste address, get live stats, flow graph, and risk score. No API key required." />
+<!-- External libs (no backend; pure client-side) -->
+<script src="https://cdn.jsdelivr.net/npm/ethers@6.7.1/dist/ethers.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+<style>
+  :root{
+    --bg:#080a12; --card:#0e1220cc; --glass:#0f1428aa; --text:#e8ecff;
+    --muted:#a6b0d9; --primary:#6ee7ff; --accent:#a78bfa; --danger:#ff6b6b; --ok:#10d7a3;
+    --ring:#1f2a44; --grid:#131a2e; --node:#cbd5ff; --stroke:#2c365e;
+  }
+  html,body{height:100%; margin:0; background:var(--bg); color:var(--text); font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial;}
+  /* Animated luxe background */
+  canvas#bg{
+    position:fixed; inset:0; z-index:-1; background: radial-gradient(1200px 800px at 70% 20%, #0a1028 0%, #080a12 60%, #05070f 100%);
+  }
+
+  .wrap{max-width:1180px; margin:24px auto; padding:0 16px 80px;}
+  .hero{
+    display:grid; grid-template-columns: 1.4fr .9fr; gap:18px; align-items:stretch;
+  }
+  .card{
+    background:linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02));
+    border:1px solid #1b2442; border-radius:18px; padding:16px 16px; box-shadow: 0 10px 30px #0008, inset 0 1px 0 #ffffff10;
+    backdrop-filter: blur(8px);
+  }
+  .title{font-weight:700; letter-spacing:.3px; font-size:28px; margin:6px 0 12px}
+  .muted{color:var(--muted)}
+  .row{display:flex; gap:10px; flex-wrap:wrap; align-items:center}
+  input, select{
+    background:#0e1430; border:1px solid #29345f; color:var(--text); border-radius:12px; padding:12px 14px; outline:none; width:100%;
+    transition: border .2s, box-shadow .2s;
+  }
+  input:focus{border-color:#6ee7ff99; box-shadow:0 0 0 4px #6ee7ff22}
+  button{
+    background:linear-gradient(135deg, #22d3ee, #a78bfa);
+    border:none; color:#041018; font-weight:700; letter-spacing:.3px;
+    padding:12px 16px; border-radius:14px; cursor:pointer; box-shadow:0 12px 22px #22d3ee33;
+  }
+  button.secondary{background:transparent; color:var(--text); border:1px solid #2a3464}
+  .grid-3{display:grid; grid-template-columns: repeat(3, 1fr); gap:14px}
+  .stat{background:linear-gradient(180deg, var(--glass), transparent); border:1px solid #1a2246; padding:14px; border-radius:14px}
+  .stat .label{font-size:12px; color:var(--muted); letter-spacing:.4px}
+  .stat .value{font-size:20px; font-weight:700; margin-top:6px}
+  .pill{display:inline-flex; align-items:center; gap:8px; padding:6px 10px; border-radius:999px; border:1px solid #25305b; background:#0d1330aa; font-size:12px}
+  .risk.low{color:var(--ok)} .risk.med{color:#ffd166} .risk.high{color:var(--danger)}
+  #graph{width:100%; height:640px; border-radius:18px; background:linear-gradient(180deg, rgba(10,14,32,.7), rgba(10,14,32,.4)); border:1px solid #1b2442}
+  footer{opacity:.8; margin-top:22px}
+  a{color:var(--primary); text-decoration:none}
+  .legend{display:flex; gap:12px; flex-wrap:wrap; align-items:center}
+  .dot{width:10px; height:10px; border-radius:50%; display:inline-block}
+  .in{background:#23d1a2} .out{background:#ff6b6b} .self{background:#93c5fd} .contract{background:#f59e0b}
+  .notice{font-size:12px; color:#9fb0ff; margin-top:6px}
+  .progress{height:8px; background:#0e1430; border-radius:999px; overflow:hidden; border:1px solid #27325d}
+  .progress > b{display:block; height:100%; background:linear-gradient(90deg, #22d3ee, #a78bfa)}
+  .toolbar{display:flex; gap:10px; flex-wrap:wrap; align-items:center; justify-content:space-between; margin-bottom:10px}
+  .toolbar .row{flex:1}
+  .mono{font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;}
+</style>
 </head>
 <body>
-    <div class="background"></div>
-    <div class="particles" id="particles"></div>
+<canvas id="bg"></canvas>
 
-    <header class="header">
-        <nav class="nav">
-            <div class="logo">
-                🔍 Monad Sybil Checker
-            </div>
-            <div class="nav-links">
-                <a href="#" class="nav-link">Intelligence</a>
-                <a href="#" class="nav-link">Analytics</a>
-                <a href="#" class="nav-link">Tools</a>
-                <a href="#" class="nav-link">API</a>
-            </div>
-            <div class="stats-bar">
-                <div class="network-status">
-                    <div class="status-dot" id="networkStatus"></div>
-                    <span id="networkStatusText">Connecting...</span>
-                </div>
-                <span>Chain ID: 10143</span>
-                <span>Network: Monad Testnet</span>
-                <span>Block: <span id="currentBlock">-</span></span>
-            </div>
-        </nav>
-    </header>
+<div class="wrap">
+  <div class="toolbar">
+    <div>
+      <div class="pill mono">MONAD Testnet &middot; Chain ID <b>10143</b> &middot; RPC: <span class="muted">https://testnet-rpc.monad.xyz</span></div>
+      <div class="notice">No API key. Requests are sent directly to the RPC. Your browser does the analysis locally.</div>
+    </div>
+    <div class="legend">
+      <span class="dot self"></span><span class="muted">Target</span>
+      <span class="dot in"></span><span class="muted">Inflow</span>
+      <span class="dot out"></span><span class="muted">Outflow</span>
+      <span class="dot contract"></span><span class="muted">Contract</span>
+    </div>
+  </div>
 
-    <div class="container">
-        <div class="search-section">
-            <h1 class="search-title">Monad Sybil Intelligence</h1>
-            <p class="search-subtitle">Advanced sybil detection and wallet analysis for Monad Testnet</p>
-            
-            <div class="search-container">
-                <input type="text" class="search-input" id="addressInput" placeholder="Enter wallet address (0x...)">
-                <button class="search-btn" id="analyzeBtn" onclick="analyzeAddress()">Analyze</button>
-            </div>
+  <div class="hero">
+    <div class="card">
+      <div class="title">Sybil Checker</div>
+      <div class="row" style="gap:12px">
+        <input id="addr" placeholder="Paste a MONAD testnet address (0x…)" class="mono" />
+        <button id="scanBtn">Scan</button>
+        <button id="exportBtn" class="secondary">Export Report</button>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <div style="flex:1">
+          <label class="muted" style="font-size:12px">Block Lookback (native tx scan)</label>
+          <input id="depth" type="range" min="100" max="2500" value="800" step="100" />
+          <div class="row" style="justify-content:space-between">
+            <span class="muted" style="font-size:12px">100</span>
+            <span class="muted" style="font-size:12px"><b id="depthVal">800</b> blocks</span>
+            <span class="muted" style="font-size:12px">2500</span>
+          </div>
         </div>
-
-        <div class="results-section" id="resultsSection">
-            <div class="main-results">
-                <div class="loading" id="loadingState">
-                    <div class="spinner"></div>
-                    <p>Analyzing address on Monad Testnet...</p>
-                    <p><small>Fetching transactions and calculating sybil patterns...</small></p>
-                </div>
-                
-                <div id="resultsContent" style="display: none;">
-                    <div class="address-info">
-                        <h2 class="card-title">Address Analysis</h2>
-                        <div class="address-display">
-                            <span id="addressDisplay"></span>
-                            <button class="copy-btn" onclick="copyAddress()">Copy</button>
-                        </div>
-                        <a href="#" id="explorerLink" class="explorer-link" target="_blank">View on Explorer →</a>
-                    </div>
-
-                    <div class="metrics-grid">
-                        <div class="metric">
-                            <div class="metric-value" id="txCount">0</div>
-                            <div class="metric-label">Total Transactions</div>
-                        </div>
-                        <div class="metric">
-                            <div class="metric-value" id="balance">0</div>
-                            <div class="metric-label">Balance (MON)</div>
-                        </div>
-                        <div class="metric">
-                            <div class="metric-value" id="firstTx">-</div>
-                            <div class="metric-label">First Transaction</div>
-                        </div>
-                        <div class="metric">
-                            <div class="metric-value" id="lastTx">-</div>
-                            <div class="metric-label">Last Activity</div>
-                        </div>
-                        <div class="metric">
-                            <div class="metric-value" id="uniqueInteractions">0</div>
-                            <div class="metric-label">Unique Interactions</div>
-                        </div>
-                        <div class="metric">
-                            <div class="metric-value" id="avgGasPrice">0</div>
-                            <div class="metric-label">Avg Gas Price (Gwei)</div>
-                        </div>
-                    </div>
-
-                    <div class="chart-container">
-                        <canvas id="activityChart"></canvas>
-                    </div>
-                </div>
-            </div>
-
-            <div class="sidebar">
-                <div class="card">
-                    <div class="card-title">Sybil Risk Score</div>
-                    <div class="risk-score">
-                        <div class="risk-circle" id="riskCircle">
-                            <div class="risk-value" id="riskScore">-</div>
-                        </div>
-                        <div class="risk-label" id="riskLabel">Calculating...</div>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <div class="card-title">Risk Analysis</div>
-                    <div id="riskFactors">
-                        <div class="loading">
-                            <div class="spinner"></div>
-                            <p>Analyzing patterns...</p>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <div class="card-title">Recent Transactions</div>
-                    <div class="transactions-list" id="transactionsList">
-                        <div class="loading">
-                            <div class="spinner"></div>
-                            <p>Loading transactions...</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
+        <div style="flex:1">
+          <label class="muted" style="font-size:12px">ERC-20/721 Logs Window</label>
+          <input id="logDepth" type="range" min="1000" max="20000" value="8000" step="1000" />
+          <div class="row" style="justify-content:space-between">
+            <span class="muted" style="font-size:12px">1k</span>
+            <span class="muted" style="font-size:12px"><b id="logDepthVal">8000</b> blocks</span>
+            <span class="muted" style="font-size:12px">20k</span>
+          </div>
         </div>
+      </div>
+
+      <div class="grid-3" style="margin-top:16px">
+        <div class="stat"><div class="label">Balance</div><div id="balance" class="value mono">—</div></div>
+        <div class="stat"><div class="label">Tx Count (nonce)</div><div id="nonce" class="value mono">—</div></div>
+        <div class="stat"><div class="label">Sybil Risk</div><div id="risk" class="value risk low">—</div></div>
+      </div>
+      <div class="grid-3" style="margin-top:10px">
+        <div class="stat"><div class="label">Unique Counterparties</div><div id="peers" class="value mono">—</div></div>
+        <div class="stat"><div class="label">Inflow / Outflow (native)</div><div id="flow" class="value mono">—</div></div>
+        <div class="stat"><div class="label">First Seen / Last Seen</div><div id="seen" class="value mono">—</div></div>
+      </div>
+      <div style="margin-top:12px">
+        <div class="label muted">Scan Progress</div>
+        <div class="progress"><b id="prog" style="width:0%"></b></div>
+      </div>
     </div>
 
-    <footer class="footer">
-        <p>Created by <a href="https://x.com/ega_2ez4crypto" target="_blank">@ega_2ez4crypto</a></p>
-        <p>Monad Testnet Sybil Detection • Chain ID: 10143 • RPC: testnet-rpc.monad.xyz</p>
-        <p><small>This tool analyzes on-chain patterns to detect potential sybil behavior. Use responsibly.</small></p>
-    </footer>
+    <div class="card">
+      <div class="title">Activity Timeline</div>
+      <canvas id="timeline" height="260"></canvas>
+      <div class="notice">Bars are grouped by day from the scanned window (native & ERC events). </div>
+    </div>
+  </div>
 
-    <script>
-        // Global variables
-        let web3;
-        let currentAddress = '';
-        let analysisData = {};
+  <div class="card" style="margin-top:18px">
+    <div class="title">Network Graph</div>
+    <div id="graph"></div>
+  </div>
 
-        // Initialize Web3 connection with retry logic
-        async function initWeb3() {
-            const rpcEndpoints = [
-                'https://testnet-rpc.monad.xyz',
-                'https://testnet-rpc.monad.xyz:443'
-            ];
-            
-            for (const rpc of rpcEndpoints) {
-                try {
-                    web3 = new Web3(rpc);
-                    
-                    // Test connection with timeout
-                    const timeoutPromise = new Promise((_, reject) => 
-                        setTimeout(() => reject(new Error('Connection timeout')), 5000)
-                    );
-                    
-                    const blockNumber = await Promise.race([
-                        web3.eth.getBlockNumber(),
-                        timeoutPromise
-                    ]);
-                    
-                    document.getElementById('currentBlock').textContent = blockNumber.toLocaleString();
-                    document.getElementById('networkStatus').className = 'status-dot';
-                    document.getElementById('networkStatusText').textContent = 'Connected';
-                    
-                    console.log(`Connected to Monad Testnet via ${rpc}. Current block:`, blockNumber);
-                    return true;
-                    
-                } catch (error) {
-                    console.warn(`Failed to connect via ${rpc}:`, error.message);
-                    continue;
-                }
-            }
-            
-            // If all endpoints fail
-            console.error('Failed to connect to all Monad Testnet endpoints');
-            document.getElementById('networkStatus').className = 'status-dot offline';
-            document.getElementById('networkStatusText').textContent = 'RPC Unavailable';
-            
-            // Still initialize Web3 for address validation
-            web3 = new Web3();
-            return false;
+  <footer class="muted">
+    Created by <a href="https://x.com/ega_2ez4crypto" target="_blank" rel="noopener">@ega_2ez4crypto</a> · Built for MONAD Testnet · UI inspired by Arkham. 
+  </footer>
+</div>
+
+<script>
+/* ===== Animated background (soft orbs + particles) ===== */
+(function bg(){
+  const c=document.getElementById('bg'),ctx=c.getContext('2d');
+  let w=innerWidth,h=innerHeight; c.width=w; c.height=h;
+  let t=0, P=Array.from({length:110},()=>({x:Math.random()*w,y:Math.random()*h,vx:(Math.random()-0.5)*.4,vy:(Math.random()-0.5)*.4,r:Math.random()*2+0.5}));
+  addEventListener('resize',()=>{w=innerWidth;h=innerHeight;c.width=w;c.height=h;});
+  function draw(){
+    ctx.clearRect(0,0,w,h);
+    // glow orbs
+    for(let i=0;i<3;i++){
+      const x = Math.sin((t+i*1.7)/1400)*(w*0.35)+w*0.5;
+      const y = Math.cos((t+i*1.1)/1700)*(h*0.35)+h*0.5;
+      const g=ctx.createRadialGradient(x,y,0,x,y,300);
+      const colors=[['#1b2055','0.0'],['#0e163b','0.4'],['transparent','1']];
+      g.addColorStop(0,'#172055aa'); g.addColorStop(.4,'#0e163baa'); g.addColorStop(1,'transparent');
+      ctx.fillStyle=g; ctx.beginPath(); ctx.arc(x,y,300,0,Math.PI*2); ctx.fill();
+    }
+    // particles
+    P.forEach(p=>{
+      p.x+=p.vx; p.y+=p.vy;
+      if(p.x<0||p.x>w) p.vx*=-1; if(p.y<0||p.y>h) p.vy*=-1;
+      ctx.fillStyle='rgba(173,199,255,.55)'; ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,6.283); ctx.fill();
+    });
+    t+=16; requestAnimationFrame(draw);
+  } draw();
+})();
+
+/* ===== App logic ===== */
+const RPC_URL = "https://testnet-rpc.monad.xyz"; // given
+const provider = new ethers.JsonRpcProvider(RPC_URL, { chainId: 10143, name: "monad-testnet" });
+
+const ui = {
+  addr: document.getElementById('addr'),
+  scan: document.getElementById('scanBtn'),
+  export: document.getElementById('exportBtn'),
+  depth: document.getElementById('depth'),
+  logDepth: document.getElementById('logDepth'),
+  depthVal: document.getElementById('depthVal'),
+  logDepthVal: document.getElementById('logDepthVal'),
+  balance: document.getElementById('balance'),
+  nonce: document.getElementById('nonce'),
+  risk: document.getElementById('risk'),
+  peers: document.getElementById('peers'),
+  flow: document.getElementById('flow'),
+  seen: document.getElementById('seen'),
+  prog: document.getElementById('prog'),
+};
+ui.depth.oninput = ()=> ui.depthVal.textContent = ui.depth.value;
+ui.logDepth.oninput = ()=> ui.logDepthVal.textContent = ui.logDepth.value;
+
+/* Helpers */
+const fmtEth = (wei)=> ethers.formatEther(wei);
+const short = (a)=> a.slice(0,6)+'…'+a.slice(-4);
+const hexToAddr = (topic)=> '0x'+topic.slice(26); // topic is 32B hex with left padding
+const dayKey = (ts)=> new Date(ts*1000).toISOString().slice(0,10);
+const sleep = (ms)=> new Promise(r=>setTimeout(r,ms));
+
+/* State */
+let timelineChart=null;
+let lastReport=null;
+
+/* Simple Sybil scoring (heuristic, not definitive) */
+function sybilScore(summary){
+  let score=0;
+  const ageDays = (Date.now()/1000 - summary.firstSeen)/86400;
+  const outRatio = summary.outCount/(summary.inCount+1);
+  const smallTxRatio = summary.smallTxs/(summary.totalNativeTxs||1);
+  const peerCount = Object.keys(summary.peers).length;
+
+  if(ageDays < 7) score+=20;
+  if(peerCount > 25 && smallTxRatio > 0.7) score+=30;
+  if(outRatio > 2) score+=20;
+  if(summary.twoWayPairs > 6) score+=15;
+  if(summary.bursts > 2) score+=15;
+
+  let label='Low', cls='low';
+  if(score>=65){label='High'; cls='high'}
+  else if(score>=35){label='Medium'; cls='med'}
+  return {score,label,cls};
+}
+
+/* Scan main */
+async function scanAddress(addr){
+  if(!ethers.isAddress(addr)) throw new Error("Invalid address format.");
+  ui.prog.style.width='0%';
+
+  // Basic stats
+  const [bal, nonce, head] = await Promise.all([
+    provider.getBalance(addr),
+    provider.getTransactionCount(addr, "latest"),
+    provider.getBlockNumber(),
+  ]);
+  ui.balance.textContent = `${Number(fmtEth(bal)).toFixed(6)} MON`;
+  ui.nonce.textContent = String(nonce);
+
+  // Containers
+  const peers={}, flows=[], days={}, peersSet=new Set();
+  let inflow=0n, outflow=0n, firstSeen=Infinity, lastSeen=0, totalNative=0, inCount=0, outCount=0, smallTxs=0, twoWay=new Set();
+
+  /* Native TX scan (block by block, windowed) */
+  const depth = Number(ui.depth.value);
+  let start = head - depth; if(start<0) start=0;
+  let processed=0;
+
+  for(let b=head; b>=start; b--){
+    const blk = await provider.getBlockWithTransactions(b);
+    blk.transactions.forEach(tx=>{
+      if(tx.from?.toLowerCase()===addr.toLowerCase() || tx.to?.toLowerCase()===addr.toLowerCase()){
+        const isOut = tx.from?.toLowerCase()===addr.toLowerCase();
+        const other = (isOut? tx.to : tx.from) || "0x0000000000000000000000000000000000000000";
+        const value = BigInt(tx.value?.toString()||"0");
+        const ts = blk.timestamp;
+        days[dayKey(ts)] ??= {in:0,out:0,ev:0};
+        if(isOut){ outflow+=value; outCount++; days[dayKey(ts)].out+= Number(fmtEth(value)); }
+        else     { inflow+=value; inCount++;  days[dayKey(ts)].in += Number(fmtEth(value)); }
+        if(Number(fmtEth(value)) < 0.02) smallTxs++;
+
+        peers[other] ??= {in:0n,out:0n,inTx:0,outTx:0,isContract:false};
+        if(isOut){ peers[other].out+=value; peers[other].outTx++; }
+        else{ peers[other].in+=value; peers[other].inTx++; }
+        peersSet.add(other);
+        flows.push({source:isOut?addr:other, target:isOut?other:addr, value:Number(fmtEth(value)), ts, native:true});
+
+        firstSeen = Math.min(firstSeen, ts);
+        lastSeen  = Math.max(lastSeen, ts);
+        totalNative++;
+        if(isOut){
+          const key = addr.toLowerCase()+"-"+other.toLowerCase();
+          const rev = other.toLowerCase()+"-"+addr.toLowerCase();
+          if(twoWay.has(rev)) twoWay.add(key); else twoWay.add(key);
         }
+      }
+    });
 
-        // Create floating particles
-        function createParticles() {
-            const particlesContainer = document.getElementById('particles');
-            for (let i = 0; i < 50; i++) {
-                const particle = document.createElement('div');
-                particle.className = 'particle';
-                particle.style.left = Math.random() * 100 + '%';
-                particle.style.animationDelay = Math.random() * 15 + 's';
-                particle.style.animationDuration = (Math.random() * 10 + 10) + 's';
-                particlesContainer.appendChild(particle);
-            }
-        }
+    processed++;
+    if(processed%20===0){ ui.prog.style.width = ((processed/depth)*50).toFixed(0)+'%'; await sleep(1); }
+  }
 
-        // Validate Ethereum address
-        function isValidAddress(address) {
-            return web3 && web3.utils.isAddress(address);
-        }
+  /* ERC-20/721 logs scan (Transfer topics) */
+  const TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
+  const logDepth = Number(ui.logDepth.value);
+  const fromBlock = Math.max(0, head-logDepth), toBlock = head;
+  try{
+    const logs = await provider.send("eth_getLogs", [{
+      fromBlock: '0x'+fromBlock.toString(16),
+      toBlock: '0x'+toBlock.toString(16),
+      topics: [TRANSFER_TOPIC]
+    }]);
+    for(const L of logs){
+      // topics: [signature, from, to], data: value/tokenId
+      const from = ethers.getAddress(hexToAddr(L.topics[1]));
+      const to   = ethers.getAddress(hexToAddr(L.topics[2]));
+      if(from.toLowerCase()!==addr.toLowerCase() && to.toLowerCase()!==addr.toLowerCase()) continue;
 
-        // Get address balance
-        async function getBalance(address) {
-            try {
-                const balanceWei = await web3.eth.getBalance(address);
-                return web3.utils.fromWei(balanceWei, 'ether');
-            } catch (error) {
-                console.error('Error getting balance:', error);
-                return '0';
-            }
-        }
+      const isOut = from.toLowerCase()===addr.toLowerCase();
+      const other = isOut? to : from;
+      const ts = (await provider.getBlock(L.blockNumber)).timestamp;
 
-        // Get transaction count
-        async function getTransactionCount(address) {
-            try {
-                return await web3.eth.getTransactionCount(address);
-            } catch (error) {
-                console.error('Error getting transaction count:', error);
-                return 0;
-            }
-        }
+      // rough amount (ERC20) — for NFTs, this will be tokenId; treat as 1
+      let amount;
+      try{ amount = Number(ethers.toBigInt(L.data))/1e18; }
+      catch{ amount = 1; }
 
-        // Enhanced transaction history fetching with better fallback
-        async function getTransactionHistory(address) {
-            try {
-                // Try real RPC first with shorter timeout
-                const currentBlock = await Promise.race([
-                    web3.eth.getBlockNumber(),
-                    new Promise((_, reject) => setTimeout(() => reject(new Error('Block fetch timeout')), 3000))
-                ]);
+      days[dayKey(ts)] ??= {in:0,out:0,ev:0};
+      days[dayKey(ts)].ev += 1;
 
-                // Quick sample of recent blocks
-                const sampleBlocks = 20; // Reduced for speed
-                const blockPromises = [];
-                
-                for (let i = 0; i < sampleBlocks; i++) {
-                    const blockNum = currentBlock - i;
-                    if (blockNum > 0) {
-                        blockPromises.push(
-                            Promise.race([
-                                web3.eth.getBlock(blockNum, true),
-                                new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 2000))
-                            ]).catch(() => null)
-                        );
-                    }
-                }
-                
-                const blocks = await Promise.all(blockPromises);
-                const transactions = [];
-                
-                blocks.forEach(block => {
-                    if (block && block.transactions) {
-                        const relevantTxs = block.transactions.filter(tx => 
-                            tx && tx.from && (
-                                tx.from.toLowerCase() === address.toLowerCase() || 
-                                (tx.to && tx.to.toLowerCase() === address.toLowerCase())
-                            )
-                        );
-                        
-                        relevantTxs.forEach(tx => {
-                            transactions.push({
-                                ...tx,
-                                timestamp: block.timestamp,
-                                blockNumber: block.number
-                            });
-                        });
-                    }
-                });
-                
-                if (transactions.length > 0) {
-                    return transactions.sort((a, b) => b.timestamp - a.timestamp).slice(0, 50);
-                }
-                
-                // If no transactions found in recent blocks, generate realistic data
-                throw new Error('No transactions found in sampled blocks');
-                
-            } catch (error) {
-                console.log('Using synthetic data due to:', error.message);
-                return generateRealisticTransactionData(address);
-            }
-        }
+      peers[other] ??= {in:0n,out:0n,inTx:0,outTx:0,isContract:false};
+      flows.push({source:isOut?addr:other, target:isOut?other:addr, value:amount, ts, native:false});
+      peersSet.add(other);
+      firstSeen = Math.min(firstSeen, ts);
+      lastSeen  = Math.max(lastSeen, ts);
+    }
+  }catch(e){
+    console.warn("eth_getLogs not available or failed:", e.message);
+  }
+  ui.prog.style.width='85%';
 
-        // Generate more realistic transaction data based on actual Monad patterns
-        function generateRealisticTransactionData(address) {
-            const transactions = [];
-            const now = Math.floor(Date.now() / 1000);
-            
-            // Generate transaction count based on address characteristics
-            const addressHash = parseInt(address.slice(2, 10), 16);
-            const baseCount = (addressHash % 50) + 10; // 10-60 transactions
-            const actualCount = Math.floor(baseCount * (0.7 + Math.random() * 0.6));
-            
-            for (let i = 0; i < actualCount; i++) {
-                // Realistic time distribution (more recent activity)
-                const daysAgo = Math.pow(Math.random(), 2) * 60; // Weighted towards recent
-                const timestamp = now - (daysAgo * 24 * 60 * 60);
-                
-                const isOutgoing = Math.random() > 0.4; // 60% outgoing
-                
-                // Realistic gas prices for testnet
-                const baseGas = 20e9; // 20 Gwei base
-                const gasPrice = baseGas + (Math.random() * 30e9); // 20-50 Gwei
-                
-                // Realistic transaction values
-                let value;
-                if (Math.random() < 0.3) { // 30% zero value (contract calls)
-                    value = '0';
-                } else {
-                    // Common testnet amounts
-                    const amounts = [0.01, 0.1, 1, 5, 10, 0.001, 0.05];
-                    const baseAmount = amounts[Math.floor(Math.random() * amounts.length)];
-                    value = web3.utils.toWei((baseAmount * (0.8 + Math.random() * 0.4)).toFixed(6), 'ether');
-                }
-                
-                transactions.push({
-                    hash: '0x' + Array.from({length: 64}, () => Math.floor(Math.random()*16).toString(16)).join(''),
-                    from: isOutgoing ? address : '0x' + Array.from({length: 40}, () => Math.floor(Math.random()*16).toString(16)).join(''),
-                    to: isOutgoing ? '0x' + Array.from({length: 40}, () => Math.floor(Math.random()*16).toString(16)).join('') : address,
-                    value: value,
-                    gasPrice: Math.floor(gasPrice).toString(),
-                    gas: Math.random() < 0.3 ? '100000' : '21000', // Higher gas for contract calls
-                    input: Math.random() < 0.3 ? '0xa9059cbb' + Array.from({length: 128}, () => Math.floor(Math.random()*16).toString(16)).join('') : '0x',
-                    timestamp: Math.floor(timestamp),
-                    blockNumber: Math.floor(Math.random() * 100000) + 2000000
-                });
-            }
-            
-            return transactions.sort((a, b) => b.timestamp - a.timestamp);
-        }
+  // Label contracts
+  await Promise.all(Object.keys(peers).map(async (p)=>{
+    try{
+      const code = await provider.getCode(p);
+      peers[p].isContract = (code && code!=='0x');
+    }catch{}
+  }));
 
-        // Enhanced sybil risk calculation with better handling for limited data
-        function calculateSybilRisk(txData, addressData) {
-            let riskScore = 0;
-            const factors = [];
+  // compute bursts (>=5 tx in any 30min bin)
+  const bins = {};
+  flows.forEach(f=>{
+    const bin = Math.floor(f.ts/1800);
+    bins[bin] = (bins[bin]||0)+1;
+  });
+  const bursts = Object.values(bins).filter(x=>x>=5).length;
 
-            // If we have transaction count from blockchain but no detailed history
-            if ((!txData || txData.length === 0) && addressData.txCount > 0) {
-                // Estimate risk based on available data
-                const txCount = addressData.txCount;
-                const balance = parseFloat(addressData.balance);
-                
-                factors.push({ text: `${txCount} total transactions on chain`, severity: 'info', points: 0 });
-                
-                if (txCount > 1000) {
-                    riskScore += 15;
-                    factors.push({ text: 'Very high transaction volume', severity: 'medium', points: 15 });
-                } else if (txCount > 500) {
-                    riskScore += 10;
-                    factors.push({ text: 'High transaction volume', severity: 'medium', points: 10 });
-                } else if (txCount > 100) {
-                    factors.push({ text: 'Moderate transaction activity', severity: 'info', points: 0 });
-                } else if (txCount > 10) {
-                    riskScore -= 5;
-                    factors.push({ text: 'Low transaction volume', severity: 'low', points: -5 });
-                }
-                
-                if (balance > 10) {
-                    riskScore -= 10;
-                    factors.push({ text: 'Maintains significant balance', severity: 'low', points: -10 });
-                } else if (balance > 1) {
-                    riskScore -= 5;
-                    factors.push({ text: 'Has meaningful balance', severity: 'low', points: -5 });
-                } else if (balance < 0.01 && txCount > 50) {
-                    riskScore += 10;
-                    factors.push({ text: 'High activity with minimal balance', severity: 'medium', points: 10 });
-                }
-                
-                riskScore = Math.max(0, Math.min(100, riskScore + 30)); // Base score for limited data
-                
-                const level = riskScore < 40 ? 'Low-Medium Risk' : riskScore < 70 ? 'Medium Risk' : 'High Risk';
-                const color = riskScore < 40 ? '#4caf50' : riskScore < 70 ? '#ffeb3b' : '#ff6759';
-                
-                factors.push({ text: 'Analysis based on limited transaction sampling', severity: 'info', points: 0 });
-                
-                return { score: Math.round(riskScore), factors, level, color };
-            }
+  // two-way pairs count (bidirectional edges)
+  const pairMap = new Map();
+  flows.forEach(f=>{
+    const key = f.source.toLowerCase()+"->"+f.target.toLowerCase();
+    pairMap.set(key, (pairMap.get(key)||0)+1);
+  });
+  let twoWayPairs=0;
+  for(const k of pairMap.keys()){
+    const [a,b]=k.split("->");
+    if(pairMap.has(b+"->"+a)) twoWayPairs++;
+  }
+  twoWayPairs = Math.floor(twoWayPairs/2);
 
-            // No transactions at all
-            if ((!txData || txData.length === 0) && addressData.txCount === 0) {
-                factors.push({ text: 'No transaction history found', severity: 'info', points: 0 });
-                factors.push({ text: 'New or inactive wallet', severity: 'info', points: 0 });
-                return { score: 0, factors, level: 'Unknown', color: '#666' };
-            }
+  const summary = {
+    address: addr,
+    balance: fmtEth(await provider.getBalance(addr)),
+    nonce,
+    peers,
+    inflow: Number(fmtEth(inflow)),
+    outflow: Number(fmtEth(outflow)),
+    firstSeen: firstSeen===Infinity? (Date.now()/1000) : firstSeen,
+    lastSeen,
+    totalNativeTxs: totalNative,
+    inCount, outCount,
+    smallTxs,
+    bursts,
+    twoWayPairs
+  };
 
-            // Full analysis with transaction data
-            const timeSpan = txData[0].timestamp - txData[txData.length - 1].timestamp;
-            const avgInterval = timeSpan / txData.length;
-            
-            if (avgInterval < 300 && txData.length > 10) {
-                riskScore += 25;
-                factors.push({ text: 'Very high transaction frequency detected', severity: 'high', points: 25 });
-            } else if (avgInterval < 1800 && txData.length > 20) {
-                riskScore += 15;
-                factors.push({ text: 'High transaction frequency', severity: 'medium', points: 15 });
-            }
+  const s = sybilScore(summary);
+  ui.risk.textContent = `${s.label} (${s.score})`; ui.risk.className = "value risk "+s.cls;
+  ui.peers.textContent = String(peersSet.size);
+  ui.flow.textContent  = `${summary.inflow.toFixed(5)} / ${summary.outflow.toFixed(5)} MON`;
+  ui.seen.textContent  = `${new Date(summary.firstSeen*1000).toLocaleString()}  —  ${new Date(summary.lastSeen*1000).toLocaleString()}`;
 
-            // Gas price consistency analysis
-            const gasPrices = txData.map(tx => parseInt(tx.gasPrice)).filter(price => price > 0);
-            if (gasPrices.length > 5) {
-                const uniqueGasPrices = [...new Set(gasPrices)];
-                const consistencyRatio = uniqueGasPrices.length / gasPrices.length;
-                
-                if (consistencyRatio < 0.1) {
-                    riskScore += 20;
-                    factors.push({ text: 'Identical gas prices (bot-like behavior)', severity: 'high', points: 20 });
-                } else if (consistencyRatio < 0.3) {
-                    riskScore += 10;
-                    factors.push({ text: 'Limited gas price variation', severity: 'medium', points: 10 });
-                }
-            }
+  // Timeline chart
+  renderTimeline(days);
 
-            // Transaction value patterns
-            const values = txData.map(tx => parseFloat(web3.utils.fromWei(tx.value, 'ether')));
-            const nonZeroValues = values.filter(v => v > 0);
-            
-            if (nonZeroValues.length > 0) {
-                const avgValue = nonZeroValues.reduce((a, b) => a + b, 0) / nonZeroValues.length;
-                const similarValues = nonZeroValues.filter(v => Math.abs(v - avgValue) / avgValue < 0.01);
-                
-                if (similarValues.length / nonZeroValues.length > 0.8 && nonZeroValues.length > 5) {
-                    riskScore += 15;
-                    factors.push({ text: 'Identical transaction amounts', severity: 'high', points: 15 });
-                }
-            }
+  // Graph
+  renderGraph(addr, peers, flows);
 
-            // Time pattern analysis
-            const hours = txData.map(tx => new Date(tx.timestamp * 1000).getHours());
-            const hourDistribution = {};
-            hours.forEach(hour => hourDistribution[hour] = (hourDistribution[hour] || 0) + 1);
-            
-            const activeHours = Object.keys(hourDistribution).length;
-            if (activeHours < 6 && txData.length > 20) {
-                riskScore += 10;
-                factors.push({ text: 'Limited active hours (automated behavior)', severity: 'medium', points: 10 });
-            }
+  ui.prog.style.width='100%';
 
-            // Interaction diversity
-            const uniqueAddresses = [...new Set([
-                ...txData.map(tx => tx.from).filter(addr => addr),
-                ...txData.map(tx => tx.to).filter(addr => addr)
-            ])].filter(addr => addr.toLowerCase() !== currentAddress.toLowerCase());
+  lastReport = {summary, days, flows, generatedAt:new Date().toISOString(), chainId:10143, rpc:RPC_URL, window:{nativeBlocks:depth, logBlocks:logDepth}};
+}
 
-            const interactionRatio = uniqueAddresses.length / txData.length;
-            if (interactionRatio < 0.1 && txData.length > 10) {
-                riskScore += 15;
-                factors.push({ text: 'Low interaction diversity', severity: 'high', points: 15 });
-            } else if (interactionRatio > 0.5) {
-                riskScore -= 5;
-                factors.push({ text: 'High interaction diversity', severity: 'low', points: -5 });
-            }
+/* Timeline (Chart.js) */
+function renderTimeline(days){
+  const labels = Object.keys(days).sort();
+  const inflows = labels.map(k=> days[k].in || 0);
+  const outflows= labels.map(k=> days[k].out || 0);
+  const events  = labels.map(k=> days[k].ev || 0);
 
-            // Contract interactions
-            const contractInteractions = txData.filter(tx => tx.to && tx.input && tx.input !== '0x').length;
-            const contractRatio = contractInteractions / txData.length;
-            
-            if (contractRatio > 0.7) {
-                factors.push({ text: `${Math.round(contractRatio * 100)}% contract interactions`, severity: 'info', points: 0 });
-            }
+  if(timelineChart){ timelineChart.destroy(); }
+  const ctx = document.getElementById('timeline');
+  timelineChart = new Chart(ctx, {
+    type:'bar',
+    data:{ labels, datasets:[
+      {label:'Inflow (MON)', data:inflows},
+      {label:'Outflow (MON)', data:outflows},
+      {label:'Token/NFT Events', data:events}
+    ]},
+    options:{
+      responsive:true,
+      scales:{
+        x:{ grid:{display:false}, ticks:{color:'#9fb0ff'} },
+        y:{ grid:{color:'#1b2442'}, ticks:{color:'#9fb0ff'} }
+      },
+      plugins:{legend:{labels:{color:'#cfe3ff'}}}
+    }
+  });
+}
 
-            // Positive factors
-            if (txData.length > 100 && timeSpan > 86400 * 30) {
-                riskScore -= 10;
-                factors.push({ text: 'Long-term consistent activity', severity: 'low', points: -10 });
-            }
+/* Arkham-like graph (D3 force layout with radial bias) */
+function renderGraph(centerAddr, peers, flows){
+  const el = document.getElementById('graph');
+  el.innerHTML='';
+  const width = el.clientWidth, height = el.clientHeight;
+  const svg = d3.select(el).append('svg').attr('width',width).attr('height',height);
 
-            if (parseFloat(addressData.balance) > 1) {
-                riskScore -= 5;
-                factors.push({ text: 'Maintains significant balance', severity: 'low', points: -5 });
-            }
+  const nodesMap = new Map();
+  nodesMap.set(centerAddr.toLowerCase(), {id:centerAddr, type:'self'});
 
-            // Normalize score
-            riskScore = Math.max(0, Math.min(100, riskScore));
+  Object.entries(peers).forEach(([addr,info])=>{
+    nodesMap.set(addr.toLowerCase(), {id:addr, type: info.isContract? 'contract':'peer'});
+  });
 
-            // Determine risk level and color
-            let level, color;
-            if (riskScore < 30) {
-                level = 'Low Risk';
-                color = '#4caf50';
-            } else if (riskScore < 70) {
-                level = 'Medium Risk';
-                color = '#ffeb3b';
-            } else {
-                level = 'High Risk';
-                color = '#ff6759';
-            }
+  const links = flows.map(f=>({
+    source: f.source.toLowerCase(),
+    target: f.target.toLowerCase(),
+    value: f.value,
+    native: f.native
+  }));
 
-            // Add summary factors
-            factors.unshift({ 
-                text: `${uniqueAddresses.length} unique counterparties`, 
-                severity: 'info', 
-                points: 0 
-            });
-            factors.unshift({ 
-                text: `${contractInteractions} contract interactions`, 
-                severity: 'info', 
-                points: 0 
-            });
+  const nodes = Array.from(nodesMap.values());
 
-            return { score: Math.round(riskScore), factors, level, color };
-        }
+  const radial = d3.scaleLinear().domain([0, nodes.length]).range([80, Math.min(width,height)/2 - 40]);
 
-        // Optimized analyze address function with progress updates
-        async function analyzeAddress() {
-            const address = document.getElementById('addressInput').value.trim();
-            
-            if (!address) {
-                showAlert('Please enter a wallet address', 'error');
-                return;
-            }
+  const sim = d3.forceSimulation(nodes)
+    .force('link', d3.forceLink(links).id(d=>d.id).distance(d=> 80 + Math.min(180, 10*Math.log((d.value||1)+2))).strength(.6))
+    .force('charge', d3.forceManyBody().strength(-220))
+    .force('center', d3.forceCenter(width/2, height/2))
+    .force('radial', d3.forceRadial((d,i)=> d.type==='self'? 0 : radial(i), width/2, height/2).strength(0.07))
+    .alpha(1).alphaDecay(0.05);
 
-            if (!isValidAddress(address)) {
-                showAlert('Please enter a valid Ethereum address (0x...)', 'error');
-                return;
-            }
+  const g = svg.append('g');
 
-            // Disable analyze button
-            document.getElementById('analyzeBtn').disabled = true;
-            document.getElementById('analyzeBtn').textContent = 'Analyzing...';
+  // Zoom & pan
+  svg.call(d3.zoom().scaleExtent([.3,4]).on('zoom', (e)=> g.attr('transform', e.transform)));
 
-            // Show results section
-            document.getElementById('resultsSection').style.display = 'grid';
-            document.getElementById('loadingState').style.display = 'block';
-            document.getElementById('resultsContent').style.display = 'none';
-            
-            // Update loading message
-            const loadingMsg = document.querySelector('#loadingState p');
-            loadingMsg.innerHTML = 'Connecting to Monad Testnet...<br><small>Fetching address data...</small>';
-            
-            // Scroll to results
-            document.getElementById('resultsSection').scrollIntoView({ behavior: 'smooth' });
+  // Links
+  const edge = g.append('g').selectAll('line').data(links).enter().append('line')
+    .attr('stroke', d=> (d.source.id===centerAddr? '#ff6b6b' : '#23d1a2'))
+    .attr('stroke-opacity', .45).attr('stroke-width', d=> 1 + Math.min(6, Math.log(d.value+2)));
 
-            currentAddress = address;
+  // Nodes
+  const node = g.append('g').selectAll('circle').data(nodes).enter().append('circle')
+    .attr('r', d=> d.type==='self'? 10 : 5.5)
+    .attr('fill', d=> d.type==='self' ? '#93c5fd' : d.type==='contract' ? '#f59e0b' : '#a3b8ff')
+    .attr('stroke', '#2c365e').attr('stroke-width', 1)
+    .call(drag(sim));
 
-            try {
-                // Step 1: Basic data (fast)
-                loadingMsg.innerHTML = 'Fetching balance and transaction count...<br><small>This is usually fast</small>';
-                
-                const [balance, txCount] = await Promise.all([
-                    getBalance(address),
-                    getTransactionCount(address)
-                ]);
+  // Labels on hover
+  const tooltip = d3.select('body').append('div').style('position','fixed').style('pointer-events','none')
+    .style('background','#0d1330cc').style('border','1px solid #27325d').style('padding','8px 10px').style('border-radius','10px')
+    .style('color','#dfe7ff').style('font', '12px ui-monospace').style('display','none');
 
-                // Step 2: Transaction history (potentially slow)
-                loadingMsg.innerHTML = 'Analyzing transaction patterns...<br><small>Sampling recent blockchain activity</small>';
-                
-                const txHistory = await getTransactionHistory(address);
+  node.on('mouseover', (e,d)=>{
+    const p = peers[d.id]||{};
+    tooltip.style('display','block').html(`
+      <div class="mono">${short(d.id)}</div>
+      <div class="muted">${d.type==='self'? 'Target address' : d.type==='contract'?'Contract':'Externally-Owned'}</div>
+      ${d.id.toLowerCase()!==centerAddr.toLowerCase() ? `<div>In: ${p.in? Number(fmtEth(p.in)).toFixed(6):0} · Out: ${p.out? Number(fmtEth(p.out)).toFixed(6):0}</div>`:''}
+    `);
+  }).on('mousemove', (e)=> tooltip.style('left', (e.clientX+12)+'px').style('top',(e.clientY+12)+'px'))
+    .on('mouseout', ()=> tooltip.style('display','none'));
 
-                // Step 3: Analysis
-                loadingMsg.innerHTML = 'Calculating sybil risk score...<br><small>Running pattern detection algorithms</small>';
+  sim.on('tick', ()=>{
+    edge.attr('x1', d=>d.source.x).attr('y1', d=>d.source.y)
+        .attr('x2', d=>d.target.x).attr('y2', d=>d.target.y);
+    node.attr('cx', d=>d.x).attr('cy', d=>d.y);
+  });
 
-                analysisData = {
-                    address,
-                    balance,
-                    txCount,
-                    txHistory
-                };
+  function drag(sim){
+    function dragstarted(event,d){ if(!event.active) sim.alphaTarget(0.2).restart(); d.fx=d.x; d.fy=d.y; }
+    function dragged(event,d){ d.fx=event.x; d.fy=event.y; }
+    function dragended(event,d){ if(!event.active) sim.alphaTarget(0); d.fx=null; d.fy=null; }
+    return d3.drag().on('start',dragstarted).on('drag',dragged).on('end',dragended);
+  }
+}
 
-                // Calculate sybil risk
-                const riskAnalysis = calculateSybilRisk(txHistory, analysisData);
+/* Export report (JSON + PNG of graph) */
+document.getElementById('exportBtn').addEventListener('click', ()=>{
+  if(!lastReport){ alert('Run a scan first.'); return; }
+  const data = new Blob([JSON.stringify(lastReport,null,2)], {type:'application/json'});
+  const url = URL.createObjectURL(data);
+  const a = Object.assign(document.createElement('a'), {href:url, download:`sybil-report-${lastReport.summary.address}.json`});
+  a.click(); URL.revokeObjectURL(url);
 
-                // Update UI with data
-                updateAddressInfo(address);
-                updateMetrics(analysisData, txHistory);
-                updateRiskScore(riskAnalysis);
-                updateRiskFactors(riskAnalysis.factors);
-                updateTransactionsList(txHistory.slice(0, 20));
-                createActivityChart(txHistory);
+  // Export SVG as PNG
+  const svg = document.querySelector('#graph svg'); if(!svg) return;
+  const xml = new XMLSerializer().serializeToString(svg);
+  const img = new Image(); const w=svg.clientWidth, h=svg.clientHeight;
+  img.onload = ()=>{
+    const c=document.createElement('canvas'); c.width=w; c.height=h; const ctx=c.getContext('2d');
+    ctx.fillStyle='#0b0f22'; ctx.fillRect(0,0,w,h); ctx.drawImage(img,0,0);
+    c.toBlob(b=>{
+      const u=URL.createObjectURL(b); const a2=document.createElement('a');
+      a2.href=u; a2.download='network-graph.png'; a2.click(); URL.revokeObjectURL(u);
+    });
+  };
+  img.src = 'data:image/svg+xml;base64,'+btoa(unescape(encodeURIComponent(xml)));
+});
 
-                // Show results
-                document.getElementById('loadingState').style.display = 'none';
-                document.getElementById('resultsContent').style.display = 'block';
-                
-                const resultType = txHistory.length === 0 ? 'warning' : 'success';
-                const resultMsg = txHistory.length === 0 
-                    ? 'Analysis completed. No recent transaction history found on sampled blocks.'
-                    : `Analysis completed! Found ${txHistory.length} transactions in recent activity.`;
-                
-                showAlert(resultMsg, resultType);
+/* Wire up UI */
+document.getElementById('scanBtn').addEventListener('click', async ()=>{
+  const addr = ui.addr.value.trim();
+  try{
+    ui.prog.style.width='3%';
+    await scanAddress(addr);
+  }catch(e){
+    console.error(e);
+    alert('Scan failed: '+ (e?.message||e));
+    ui.prog.style.width='0%';
+  }
+});
 
-            } catch (error) {
-                console.error('Analysis error:', error);
-                
-                if (error.message === 'Timeout') {
-                    showAlert('Network timeout. Monad Testnet RPC may be slow. Please try again.', 'warning');
-                } else {
-                    showAlert('Error analyzing address. Network may be congested. Please try again.', 'error');
-                }
-            } finally {
-                // Re-enable analyze button
-                document.getElementById('analyzeBtn').disabled = false;
-                document.getElementById('analyzeBtn').textContent = 'Analyze';
-            }
-        }
-
-        function updateAddressInfo(address) {
-            document.getElementById('addressDisplay').textContent = address;
-            document.getElementById('explorerLink').href = `https://explorer.monad.xyz/address/${address}`;
-        }
-
-        // Enhanced metrics update with better error handling
-        function updateMetrics(data, txHistory) {
-            // Always show transaction count from blockchain
-            document.getElementById('txCount').textContent = data.txCount.toLocaleString();
-            document.getElementById('balance').textContent = parseFloat(data.balance).toFixed(6);
-
-            if (txHistory && txHistory.length > 0) {
-                const sortedTxs = [...txHistory].sort((a, b) => a.timestamp - b.timestamp);
-                const firstTx = new Date(sortedTxs[0].timestamp * 1000);
-                const lastTx = new Date(sortedTxs[sortedTxs.length - 1].timestamp * 1000);
-                
-                document.getElementById('firstTx').textContent = firstTx.toLocaleDateString();
-                document.getElementById('lastTx').textContent = lastTx.toLocaleDateString();
-
-                // Calculate unique interactions
-                const uniqueAddresses = [...new Set([
-                    ...txHistory.map(tx => tx.from).filter(addr => addr),
-                    ...txHistory.map(tx => tx.to).filter(addr => addr)
-                ])].filter(addr => addr.toLowerCase() !== currentAddress.toLowerCase());
-                
-                document.getElementById('uniqueInteractions').textContent = uniqueAddresses.length;
-
-                // Calculate average gas price
-                const gasPrices = txHistory.map(tx => parseInt(tx.gasPrice)).filter(price => price > 0);
-                const avgGasPrice = gasPrices.length > 0 
-                    ? (gasPrices.reduce((a, b) => a + b, 0) / gasPrices.length / 1e9).toFixed(2)
-                    : '0';
-                document.getElementById('avgGasPrice').textContent = avgGasPrice;
-            } else {
-                // Handle case with no transaction history but show some activity based on tx count
-                if (data.txCount > 0) {
-                    const estimatedDaysAgo = Math.min(data.txCount, 30);
-                    const estimatedFirstTx = new Date();
-                    estimatedFirstTx.setDate(estimatedFirstTx.getDate() - estimatedDaysAgo);
-                    
-                    document.getElementById('firstTx').textContent = estimatedFirstTx.toLocaleDateString();
-                    document.getElementById('lastTx').textContent = 'Recent';
-                    document.getElementById('uniqueInteractions').textContent = Math.min(data.txCount, 20);
-                    document.getElementById('avgGasPrice').textContent = '25.0';
-                } else {
-                    document.getElementById('firstTx').textContent = '-';
-                    document.getElementById('lastTx').textContent = '-';
-                    document.getElementById('uniqueInteractions').textContent = '0';
-                    document.getElementById('avgGasPrice').textContent = '0';
-                }
-            }
-        }
-
-        function updateRiskScore(riskAnalysis) {
-            const { score, level, color } = riskAnalysis;
-            
-            document.getElementById('riskScore').textContent = score;
-            document.getElementById('riskLabel').textContent = level;
-            
-            // Update risk circle color
-            const riskCircle = document.getElementById('riskCircle');
-            const gradient = score < 30 
-                ? 'conic-gradient(from 0deg, #4caf50 0%, #4caf50 100%)'
-                : score < 70 
-                    ? 'conic-gradient(from 0deg, #4caf50 0%, #ffeb3b 50%, #ffeb3b 100%)'
-                    : 'conic-gradient(from 0deg, #4caf50 0%, #ffeb3b 40%, #ff6759 100%)';
-            
-            riskCircle.style.background = gradient;
-        }
-
-        function updateRiskFactors(factors) {
-            const container = document.getElementById('riskFactors');
-            container.innerHTML = '';
-            
-            factors.forEach(factor => {
-                const div = document.createElement('div');
-                div.className = 'risk-factor';
-                
-                const indicatorClass = factor.severity === 'high' ? 'risk-high' :
-                                     factor.severity === 'medium' ? 'risk-medium' :
-                                     factor.severity === 'low' ? 'risk-low' : 'risk-info';
-                
-                const pointsText = factor.points !== 0 ? ` (${factor.points > 0 ? '+' : ''}${factor.points})` : '';
-                
-                div.innerHTML = `
-                    <div style="display: flex; align-items: center;">
-                        <div class="risk-indicator ${indicatorClass}"></div>
-                        <span>${factor.text}</span>
-                    </div>
-                    <span style="font-size: 10px; color: rgba(255,255,255,0.5);">${pointsText}</span>
-                `;
-                container.appendChild(div);
-            });
-        }
-
-        function updateTransactionsList(transactions) {
-            const container = document.getElementById('transactionsList');
-            container.innerHTML = '';
-            
-            if (transactions.length === 0) {
-                container.innerHTML = '<p style="text-align: center; color: rgba(255,255,255,0.5); padding: 20px;">No recent transactions found</p>';
-                return;
-            }
-            
-            transactions.forEach(tx => {
-                const div = document.createElement('div');
-                div.className = 'transaction-item';
-                
-                const value = parseFloat(web3.utils.fromWei(tx.value, 'ether'));
-                const time = new Date(tx.timestamp * 1000);
-                const isOutgoing = tx.from.toLowerCase() === currentAddress.toLowerCase();
-                
-                div.innerHTML = `
-                    <div class="tx-hash" onclick="window.open('https://explorer.monad.xyz/tx/${tx.hash}', '_blank')">
-                        ${tx.hash.slice(0, 10)}...${tx.hash.slice(-8)}
-                    </div>
-                    <div class="tx-details">
-                        <div class="tx-value" style="color: ${isOutgoing ? '#ff6759' : '#4caf50'}">
-                            ${isOutgoing ? '-' : '+'}${value.toFixed(6)} MON
-                        </div>
-                        <div class="tx-time">${time.toLocaleString()}</div>
-                    </div>
-                `;
-                container.appendChild(div);
-            });
-        }
-
-        function createActivityChart(transactions) {
-            const ctx = document.getElementById('activityChart').getContext('2d');
-            
-            // Clear existing chart
-            Chart.getChart(ctx)?.destroy();
-            
-            if (transactions.length === 0) {
-                ctx.fillStyle = 'rgba(255,255,255,0.5)';
-                ctx.textAlign = 'center';
-                ctx.fillText('No transaction data available', ctx.canvas.width/2, ctx.canvas.height/2);
-                return;
-            }
-            
-            // Group transactions by day
-            const dailyActivity = {};
-            const now = new Date();
-            
-            // Initialize last 30 days
-            for (let i = 29; i >= 0; i--) {
-                const date = new Date(now);
-                date.setDate(date.getDate() - i);
-                const key = date.toISOString().split('T')[0];
-                dailyActivity[key] = 0;
-            }
-            
-            // Count transactions per day
-            transactions.forEach(tx => {
-                const date = new Date(tx.timestamp * 1000).toISOString().split('T')[0];
-                if (dailyActivity.hasOwnProperty(date)) {
-                    dailyActivity[date]++;
-                }
-            });
-            
-            const labels = Object.keys(dailyActivity).map(date => {
-                return new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-            });
-            const data = Object.values(dailyActivity);
-            
-            new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels,
-                    datasets: [{
-                        label: 'Daily Transactions',
-                        data,
-                        borderColor: '#7877c6',
-                        backgroundColor: 'rgba(120, 119, 198, 0.1)',
-                        fill: true,
-                        tension: 0.4,
-                        pointBackgroundColor: '#7877c6',
-                        pointBorderColor: '#ffffff',
-                        pointBorderWidth: 2,
-                        pointRadius: 4
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            labels: {
-                                color: '#ffffff'
-                            }
-                        },
-                        title: {
-                            display: true,
-                            text: 'Transaction Activity (Last 30 Days)',
-                            color: '#ffffff'
-                        }
-                    },
-                    scales: {
-                        x: {
-                            ticks: {
-                                color: '#ffffff'
-                            },
-                            grid: {
-                                color: 'rgba(255, 255, 255, 0.1)'
-                            }
-                        },
-                        y: {
-                            beginAtZero: true,
-                            ticks: {
-                                color: '#ffffff',
-                                stepSize: 1
-                            },
-                            grid: {
-                                color: 'rgba(255, 255, 255, 0.1)'
-                            }
-                        }
-                    }
-                }
-            });
-        }
-
-        function copyAddress() {
-            const addressText = document.getElementById('addressDisplay').textContent;
-            navigator.clipboard.writeText(addressText).then(() => {
-                const btn = event.target;
-                const originalText = btn.textContent;
-                btn.textContent = 'Copied!';
-                btn.style.background = 'rgba(76, 175, 80, 0.3)';
-                btn.style.borderColor = '#4caf50';
-                btn.style.color = '#4caf50';
-                
-                setTimeout(() => {
-                    btn.textContent = originalText;
-                    btn.style.background = 'rgba(120, 119, 198, 0.2)';
-                    btn.style.borderColor = '#7877c6';
-                    btn.style.color = '#7877c6';
-                }, 2000);
-            }).catch(() => {
-                showAlert('Failed to copy address', 'error');
-            });
-        }
-
-        function showAlert(message, type) {
-            const existingAlert = document.querySelector('.alert');
-            if (existingAlert) {
-                existingAlert.remove();
-            }
-            
-            const alert = document.createElement('div');
-            alert.className = `alert ${type === 'success' ? 'success' : type === 'warning' ? 'warning' : ''}`;
-            alert.textContent = message;
-            
-            document.querySelector('.search-container').appendChild(alert);
-            
-            setTimeout(() => {
-                alert.remove();
-            }, 5000);
-        }
-
-        // Update network status periodically
-        async function updateNetworkStatus() {
-            try {
-                const blockNumber = await web3.eth.getBlockNumber();
-                document.getElementById('currentBlock').textContent = blockNumber.toLocaleString();
-                document.getElementById('networkStatus').className = 'status-dot';
-                document.getElementById('networkStatusText').textContent = 'Connected';
-            } catch (error) {
-                document.getElementById('networkStatus').className = 'status-dot offline';
-                document.getElementById('networkStatusText').textContent = 'Offline';
-            }
-        }
-
-        // Handle Enter key in search input
-        document.getElementById('addressInput').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter' && !document.getElementById('analyzeBtn').disabled) {
-                analyzeAddress();
-            }
-        });
-
-        // Initialize on page load
-        document.addEventListener('DOMContentLoaded', async function() {
-            createParticles();
-            
-            const connected = await initWeb3();
-            if (connected) {
-                // Update network status every 30 seconds
-                setInterval(updateNetworkStatus, 30000);
-            } else {
-                showAlert('Unable to connect to Monad Testnet. Some features may not work properly.', 'warning');
-            }
-        });
-
-        // Add some example addresses for testing
-        const exampleAddresses = [
-            '0x742d35Cc6635C0532925a3b8D319D5DD3F6c323E',
-            '0xD8e1E7009802c914b0d39B31Fc1759A865b727B1',
-            '0x8ba1f109551bD432803012645Hac136c722Ba81B'
-        ];
-
-        // Add click handler for examples
-        document.addEventListener('click', function(e) {
-            if (e.target.classList.contains('example-address')) {
-                document.getElementById('addressInput').value = e.target.textContent;
-                analyzeAddress();
-            }
-        });
-    </script>
+/* Prefill demo if hash provided e.g., index.html#0xabc... */
+window.addEventListener('load', ()=>{
+  const hash = location.hash.slice(1);
+  if(hash && /^0x[0-9a-fA-F]{40}$/.test(hash)){ ui.addr.value=hash; }
+});
+</script>
 </body>
 </html>
