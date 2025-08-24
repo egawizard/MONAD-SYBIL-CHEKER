@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Monad Testnet Sybil Checker</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/web3/1.8.0/web3.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -131,6 +132,30 @@
             color: rgba(255, 255, 255, 0.5);
         }
 
+        .network-status {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #4caf50;
+            animation: pulse 2s infinite;
+        }
+
+        .status-dot.offline {
+            background: #ff6759;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
         /* Main Content */
         .container {
             max-width: 1400px;
@@ -196,11 +221,17 @@
             font-weight: 600;
             cursor: pointer;
             transition: all 0.3s;
+            disabled: false;
         }
 
-        .search-btn:hover {
+        .search-btn:hover:not(:disabled) {
             transform: translateY(-1px);
             box-shadow: 0 5px 15px rgba(120, 119, 198, 0.4);
+        }
+
+        .search-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
         }
 
         /* Results Section */
@@ -252,6 +283,24 @@
             border-radius: 8px;
             word-break: break-all;
             border-left: 3px solid #7877c6;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .copy-btn {
+            background: rgba(120, 119, 198, 0.2);
+            border: 1px solid #7877c6;
+            color: #7877c6;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.3s;
+        }
+
+        .copy-btn:hover {
+            background: rgba(120, 119, 198, 0.3);
         }
 
         .risk-score {
@@ -265,7 +314,6 @@
             margin: 0 auto 15px;
             position: relative;
             border-radius: 50%;
-            background: conic-gradient(from 0deg, #ff6759 0%, #ffeb3b 40%, #4caf50 100%);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -330,22 +378,39 @@
 
         .transaction-item {
             display: flex;
-            justify-content: between;
+            justify-content: space-between;
             align-items: center;
             padding: 12px 0;
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            font-size: 12px;
         }
 
         .tx-hash {
             font-family: 'Courier New', monospace;
-            font-size: 12px;
             color: #7877c6;
-            flex: 1;
+            cursor: pointer;
+            transition: color 0.3s;
         }
 
-        .tx-amount {
+        .tx-hash:hover {
+            color: #ff6759;
+        }
+
+        .tx-details {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 2px;
+        }
+
+        .tx-value {
             color: #4caf50;
             font-weight: 500;
+        }
+
+        .tx-time {
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 10px;
         }
 
         .loading {
@@ -369,7 +434,51 @@
             100% { transform: rotate(360deg); }
         }
 
-        /* Footer */
+        .alert {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            background: rgba(255, 103, 89, 0.1);
+            border: 1px solid rgba(255, 103, 89, 0.3);
+            color: #ff6759;
+        }
+
+        .success {
+            background: rgba(76, 175, 80, 0.1);
+            border: 1px solid rgba(76, 175, 80, 0.3);
+            color: #4caf50;
+        }
+
+        .warning {
+            background: rgba(255, 235, 59, 0.1);
+            border: 1px solid rgba(255, 235, 59, 0.3);
+            color: #ffeb3b;
+        }
+
+        .risk-factor {
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .risk-factor:last-child {
+            border-bottom: none;
+        }
+
+        .risk-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 10px;
+        }
+
+        .risk-high { background: #ff6759; }
+        .risk-medium { background: #ffeb3b; }
+        .risk-low { background: #4caf50; }
+        .risk-info { background: #7877c6; }
+
         .footer {
             text-align: center;
             padding: 40px;
@@ -384,7 +493,17 @@
             text-decoration: none;
         }
 
-        /* Responsive */
+        .explorer-link {
+            color: #7877c6;
+            text-decoration: none;
+            font-size: 12px;
+            margin-left: 10px;
+        }
+
+        .explorer-link:hover {
+            color: #ff6759;
+        }
+
         @media (max-width: 768px) {
             .results-section {
                 grid-template-columns: 1fr;
@@ -402,21 +521,15 @@
             .container {
                 padding: 20px 10px;
             }
-        }
 
-        .alert {
-            margin-top: 20px;
-            padding: 15px;
-            border-radius: 8px;
-            background: rgba(255, 103, 89, 0.1);
-            border: 1px solid rgba(255, 103, 89, 0.3);
-            color: #ff6759;
-        }
+            .metrics-grid {
+                grid-template-columns: 1fr;
+            }
 
-        .success {
-            background: rgba(76, 175, 80, 0.1);
-            border: 1px solid rgba(76, 175, 80, 0.3);
-            color: #4caf50;
+            .stats-bar {
+                flex-direction: column;
+                gap: 10px;
+            }
         }
     </style>
 </head>
@@ -436,9 +549,13 @@
                 <a href="#" class="nav-link">API</a>
             </div>
             <div class="stats-bar">
+                <div class="network-status">
+                    <div class="status-dot" id="networkStatus"></div>
+                    <span id="networkStatusText">Connecting...</span>
+                </div>
                 <span>Chain ID: 10143</span>
                 <span>Network: Monad Testnet</span>
-                <span>Status: Live</span>
+                <span>Block: <span id="currentBlock">-</span></span>
             </div>
         </nav>
     </header>
@@ -450,7 +567,7 @@
             
             <div class="search-container">
                 <input type="text" class="search-input" id="addressInput" placeholder="Enter wallet address (0x...)">
-                <button class="search-btn" onclick="analyzeAddress()">Analyze</button>
+                <button class="search-btn" id="analyzeBtn" onclick="analyzeAddress()">Analyze</button>
             </div>
         </div>
 
@@ -459,12 +576,17 @@
                 <div class="loading" id="loadingState">
                     <div class="spinner"></div>
                     <p>Analyzing address on Monad Testnet...</p>
+                    <p><small>Fetching transactions and calculating sybil patterns...</small></p>
                 </div>
                 
                 <div id="resultsContent" style="display: none;">
                     <div class="address-info">
                         <h2 class="card-title">Address Analysis</h2>
-                        <div class="address-display" id="addressDisplay"></div>
+                        <div class="address-display">
+                            <span id="addressDisplay"></span>
+                            <button class="copy-btn" onclick="copyAddress()">Copy</button>
+                        </div>
+                        <a href="#" id="explorerLink" class="explorer-link" target="_blank">View on Explorer →</a>
                     </div>
 
                     <div class="metrics-grid">
@@ -484,6 +606,14 @@
                             <div class="metric-value" id="lastTx">-</div>
                             <div class="metric-label">Last Activity</div>
                         </div>
+                        <div class="metric">
+                            <div class="metric-value" id="uniqueInteractions">0</div>
+                            <div class="metric-label">Unique Interactions</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-value" id="avgGasPrice">0</div>
+                            <div class="metric-label">Avg Gas Price (Gwei)</div>
+                        </div>
                     </div>
 
                     <div class="chart-container">
@@ -496,7 +626,7 @@
                 <div class="card">
                     <div class="card-title">Sybil Risk Score</div>
                     <div class="risk-score">
-                        <div class="risk-circle">
+                        <div class="risk-circle" id="riskCircle">
                             <div class="risk-value" id="riskScore">-</div>
                         </div>
                         <div class="risk-label" id="riskLabel">Calculating...</div>
@@ -504,7 +634,7 @@
                 </div>
 
                 <div class="card">
-                    <div class="card-title">Risk Factors</div>
+                    <div class="card-title">Risk Analysis</div>
                     <div id="riskFactors">
                         <div class="loading">
                             <div class="spinner"></div>
@@ -528,10 +658,37 @@
 
     <footer class="footer">
         <p>Created by <a href="https://x.com/ega_2ez4crypto" target="_blank">@ega_2ez4crypto</a></p>
-        <p>Monad Testnet Sybil Detection • Chain ID: 10143</p>
+        <p>Monad Testnet Sybil Detection • Chain ID: 10143 • RPC: testnet-rpc.monad.xyz</p>
+        <p><small>This tool analyzes on-chain patterns to detect potential sybil behavior. Use responsibly.</small></p>
     </footer>
 
     <script>
+        // Global variables
+        let web3;
+        let currentAddress = '';
+        let analysisData = {};
+
+        // Initialize Web3 connection
+        async function initWeb3() {
+            try {
+                web3 = new Web3('https://testnet-rpc.monad.xyz');
+                
+                // Test connection
+                const blockNumber = await web3.eth.getBlockNumber();
+                document.getElementById('currentBlock').textContent = blockNumber.toLocaleString();
+                document.getElementById('networkStatus').className = 'status-dot';
+                document.getElementById('networkStatusText').textContent = 'Connected';
+                
+                console.log('Connected to Monad Testnet. Current block:', blockNumber);
+                return true;
+            } catch (error) {
+                console.error('Failed to connect to Monad Testnet:', error);
+                document.getElementById('networkStatus').className = 'status-dot offline';
+                document.getElementById('networkStatusText').textContent = 'Offline';
+                return false;
+            }
+        }
+
         // Create floating particles
         function createParticles() {
             const particlesContainer = document.getElementById('particles');
@@ -545,14 +702,215 @@
             }
         }
 
+        // Validate Ethereum address
+        function isValidAddress(address) {
+            return web3 && web3.utils.isAddress(address);
+        }
+
+        // Get address balance
+        async function getBalance(address) {
+            try {
+                const balanceWei = await web3.eth.getBalance(address);
+                return web3.utils.fromWei(balanceWei, 'ether');
+            } catch (error) {
+                console.error('Error getting balance:', error);
+                return '0';
+            }
+        }
+
+        // Get transaction count
+        async function getTransactionCount(address) {
+            try {
+                return await web3.eth.getTransactionCount(address);
+            } catch (error) {
+                console.error('Error getting transaction count:', error);
+                return 0;
+            }
+        }
+
+        // Get transaction history (limited by RPC capabilities)
+        async function getTransactionHistory(address, blockRange = 1000) {
+            const transactions = [];
+            try {
+                const currentBlock = await web3.eth.getBlockNumber();
+                const startBlock = Math.max(0, currentBlock - blockRange);
+
+                // Get recent blocks and filter transactions
+                for (let i = currentBlock; i > startBlock && transactions.length < 50; i--) {
+                    try {
+                        const block = await web3.eth.getBlock(i, true);
+                        if (block && block.transactions) {
+                            const relevantTxs = block.transactions.filter(tx => 
+                                tx.from && (tx.from.toLowerCase() === address.toLowerCase() || 
+                                           (tx.to && tx.to.toLowerCase() === address.toLowerCase()))
+                            );
+                            transactions.push(...relevantTxs.map(tx => ({
+                                ...tx,
+                                timestamp: block.timestamp,
+                                blockNumber: block.number
+                            })));
+                        }
+                    } catch (blockError) {
+                        console.warn(`Error fetching block ${i}:`, blockError);
+                    }
+                }
+                
+                return transactions.sort((a, b) => b.timestamp - a.timestamp);
+            } catch (error) {
+                console.error('Error getting transaction history:', error);
+                return [];
+            }
+        }
+
+        // Calculate sybil risk score based on transaction patterns
+        function calculateSybilRisk(txData, addressData) {
+            let riskScore = 0;
+            const factors = [];
+
+            if (txData.length === 0) {
+                factors.push({ text: 'No transaction history found', severity: 'info', points: 0 });
+                return { score: 0, factors, level: 'Unknown', color: '#666' };
+            }
+
+            // Factor 1: Transaction frequency analysis
+            const timeSpan = txData[0].timestamp - txData[txData.length - 1].timestamp;
+            const avgInterval = timeSpan / txData.length;
+            
+            if (avgInterval < 300 && txData.length > 10) { // Less than 5 minutes between transactions
+                riskScore += 25;
+                factors.push({ text: 'Very high transaction frequency detected', severity: 'high', points: 25 });
+            } else if (avgInterval < 1800 && txData.length > 20) { // Less than 30 minutes
+                riskScore += 15;
+                factors.push({ text: 'High transaction frequency', severity: 'medium', points: 15 });
+            }
+
+            // Factor 2: Gas price consistency (potential bot behavior)
+            const gasPrices = txData.map(tx => parseInt(tx.gasPrice)).filter(price => price > 0);
+            if (gasPrices.length > 5) {
+                const uniqueGasPrices = [...new Set(gasPrices)];
+                const consistencyRatio = uniqueGasPrices.length / gasPrices.length;
+                
+                if (consistencyRatio < 0.1) { // 90% same gas price
+                    riskScore += 20;
+                    factors.push({ text: 'Identical gas prices (bot-like behavior)', severity: 'high', points: 20 });
+                } else if (consistencyRatio < 0.3) {
+                    riskScore += 10;
+                    factors.push({ text: 'Limited gas price variation', severity: 'medium', points: 10 });
+                }
+            }
+
+            // Factor 3: Transaction value patterns
+            const values = txData.map(tx => parseFloat(web3.utils.fromWei(tx.value, 'ether')));
+            const nonZeroValues = values.filter(v => v > 0);
+            
+            if (nonZeroValues.length > 0) {
+                const avgValue = nonZeroValues.reduce((a, b) => a + b, 0) / nonZeroValues.length;
+                const similarValues = nonZeroValues.filter(v => Math.abs(v - avgValue) / avgValue < 0.01);
+                
+                if (similarValues.length / nonZeroValues.length > 0.8 && nonZeroValues.length > 5) {
+                    riskScore += 15;
+                    factors.push({ text: 'Identical transaction amounts', severity: 'high', points: 15 });
+                }
+            }
+
+            // Factor 4: Time pattern analysis
+            const hours = txData.map(tx => new Date(tx.timestamp * 1000).getHours());
+            const hourDistribution = {};
+            hours.forEach(hour => hourDistribution[hour] = (hourDistribution[hour] || 0) + 1);
+            
+            const activeHours = Object.keys(hourDistribution).length;
+            if (activeHours < 6 && txData.length > 20) { // Active in less than 6 hours of day
+                riskScore += 10;
+                factors.push({ text: 'Limited active hours (automated behavior)', severity: 'medium', points: 10 });
+            }
+
+            // Factor 5: Interaction diversity
+            const uniqueAddresses = [...new Set([
+                ...txData.map(tx => tx.from).filter(addr => addr),
+                ...txData.map(tx => tx.to).filter(addr => addr)
+            ])].filter(addr => addr.toLowerCase() !== currentAddress.toLowerCase());
+
+            const interactionRatio = uniqueAddresses.length / txData.length;
+            if (interactionRatio < 0.1 && txData.length > 10) {
+                riskScore += 15;
+                factors.push({ text: 'Low interaction diversity', severity: 'high', points: 15 });
+            } else if (interactionRatio > 0.5) {
+                riskScore -= 5;
+                factors.push({ text: 'High interaction diversity', severity: 'low', points: -5 });
+            }
+
+            // Factor 6: Contract interactions
+            const contractInteractions = txData.filter(tx => tx.to && tx.input && tx.input !== '0x').length;
+            const contractRatio = contractInteractions / txData.length;
+            
+            if (contractRatio > 0.7) {
+                factors.push({ text: `${Math.round(contractRatio * 100)}% contract interactions`, severity: 'info', points: 0 });
+            }
+
+            // Positive factors (reduce risk)
+            if (txData.length > 100 && timeSpan > 86400 * 30) { // More than 100 txs over 30 days
+                riskScore -= 10;
+                factors.push({ text: 'Long-term consistent activity', severity: 'low', points: -10 });
+            }
+
+            if (parseFloat(addressData.balance) > 1) { // Significant balance
+                riskScore -= 5;
+                factors.push({ text: 'Maintains significant balance', severity: 'low', points: -5 });
+            }
+
+            // Normalize score
+            riskScore = Math.max(0, Math.min(100, riskScore));
+
+            // Determine risk level and color
+            let level, color;
+            if (riskScore < 30) {
+                level = 'Low Risk';
+                color = '#4caf50';
+            } else if (riskScore < 70) {
+                level = 'Medium Risk';
+                color = '#ffeb3b';
+            } else {
+                level = 'High Risk';
+                color = '#ff6759';
+            }
+
+            // Add summary factors
+            factors.unshift({ 
+                text: `${uniqueAddresses.length} unique counterparties`, 
+                severity: 'info', 
+                points: 0 
+            });
+            factors.unshift({ 
+                text: `${contractInteractions} contract interactions`, 
+                severity: 'info', 
+                points: 0 
+            });
+
+            return { score: Math.round(riskScore), factors, level, color };
+        }
+
         // Analyze address function
         async function analyzeAddress() {
             const address = document.getElementById('addressInput').value.trim();
             
-            if (!address || !address.startsWith('0x') || address.length !== 42) {
+            if (!address) {
+                showAlert('Please enter a wallet address', 'error');
+                return;
+            }
+
+            if (!isValidAddress(address)) {
                 showAlert('Please enter a valid Ethereum address (0x...)', 'error');
                 return;
             }
+
+            if (!web3) {
+                showAlert('Not connected to Monad Testnet. Please refresh and try again.', 'error');
+                return;
+            }
+
+            // Disable analyze button
+            document.getElementById('analyzeBtn').disabled = true;
+            document.getElementById('analyzeBtn').textContent = 'Analyzing...';
 
             // Show results section
             document.getElementById('resultsSection').style.display = 'grid';
@@ -562,136 +920,104 @@
             // Scroll to results
             document.getElementById('resultsSection').scrollIntoView({ behavior: 'smooth' });
 
+            currentAddress = address;
+
             try {
-                // Simulate API calls with mock data
-                await simulateAnalysis(address);
-                
+                // Fetch real blockchain data
+                const [balance, txCount, txHistory] = await Promise.all([
+                    getBalance(address),
+                    getTransactionCount(address),
+                    getTransactionHistory(address)
+                ]);
+
+                analysisData = {
+                    address,
+                    balance,
+                    txCount,
+                    txHistory
+                };
+
+                // Calculate sybil risk
+                const riskAnalysis = calculateSybilRisk(txHistory, analysisData);
+
+                // Update UI with real data
+                updateAddressInfo(address);
+                updateMetrics(analysisData, txHistory);
+                updateRiskScore(riskAnalysis);
+                updateRiskFactors(riskAnalysis.factors);
+                updateTransactionsList(txHistory.slice(0, 20));
+                createActivityChart(txHistory);
+
                 // Show results
                 document.getElementById('loadingState').style.display = 'none';
                 document.getElementById('resultsContent').style.display = 'block';
                 
                 showAlert('Analysis completed successfully!', 'success');
+
             } catch (error) {
-                showAlert('Error analyzing address. Please try again.', 'error');
                 console.error('Analysis error:', error);
+                showAlert('Error analyzing address. Please check the address and try again.', 'error');
+            } finally {
+                // Re-enable analyze button
+                document.getElementById('analyzeBtn').disabled = false;
+                document.getElementById('analyzeBtn').textContent = 'Analyze';
             }
         }
 
-        // Simulate analysis with mock data
-        async function simulateAnalysis(address) {
-            // Update address display
+        function updateAddressInfo(address) {
             document.getElementById('addressDisplay').textContent = address;
-            
-            // Simulate loading delay
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            
-            // Generate mock data
-            const mockData = generateMockData(address);
-            
-            // Update metrics
-            document.getElementById('txCount').textContent = mockData.txCount.toLocaleString();
-            document.getElementById('balance').textContent = mockData.balance.toFixed(4);
-            document.getElementById('firstTx').textContent = mockData.firstTx;
-            document.getElementById('lastTx').textContent = mockData.lastTx;
-            
-            // Update risk score
-            document.getElementById('riskScore').textContent = mockData.riskScore;
-            document.getElementById('riskLabel').textContent = mockData.riskLabel;
-            
-            // Update risk factors
-            updateRiskFactors(mockData.riskFactors);
-            
-            // Update transactions
-            updateTransactions(mockData.transactions);
-            
-            // Create chart
-            createActivityChart(mockData.chartData);
+            document.getElementById('explorerLink').href = `https://explorer.monad.xyz/address/${address}`;
         }
 
-        // Generate mock data based on address
-        function generateMockData(address) {
-            const hash = address.slice(2, 10);
-            const seed = parseInt(hash, 16) % 1000;
-            
-            const txCount = Math.max(50, seed * 2 + Math.floor(Math.random() * 500));
-            const balance = Math.random() * 1000 + 10;
-            const riskScore = Math.max(1, Math.min(100, seed / 10 + Math.floor(Math.random() * 40)));
-            
-            let riskLabel, riskColor;
-            if (riskScore < 30) {
-                riskLabel = 'Low Risk';
-                riskColor = '#4caf50';
-            } else if (riskScore < 70) {
-                riskLabel = 'Medium Risk';
-                riskColor = '#ffeb3b';
+        function updateMetrics(data, txHistory) {
+            document.getElementById('txCount').textContent = data.txCount.toLocaleString();
+            document.getElementById('balance').textContent = parseFloat(data.balance).toFixed(6);
+
+            if (txHistory.length > 0) {
+                const sortedTxs = [...txHistory].sort((a, b) => a.timestamp - b.timestamp);
+                const firstTx = new Date(sortedTxs[0].timestamp * 1000);
+                const lastTx = new Date(sortedTxs[sortedTxs.length - 1].timestamp * 1000);
+                
+                document.getElementById('firstTx').textContent = firstTx.toLocaleDateString();
+                document.getElementById('lastTx').textContent = lastTx.toLocaleDateString();
+
+                // Calculate unique interactions
+                const uniqueAddresses = [...new Set([
+                    ...txHistory.map(tx => tx.from).filter(addr => addr),
+                    ...txHistory.map(tx => tx.to).filter(addr => addr)
+                ])].filter(addr => addr.toLowerCase() !== currentAddress.toLowerCase());
+                
+                document.getElementById('uniqueInteractions').textContent = uniqueAddresses.length;
+
+                // Calculate average gas price
+                const gasPrices = txHistory.map(tx => parseInt(tx.gasPrice)).filter(price => price > 0);
+                const avgGasPrice = gasPrices.length > 0 
+                    ? (gasPrices.reduce((a, b) => a + b, 0) / gasPrices.length / 1e9).toFixed(2)
+                    : '0';
+                document.getElementById('avgGasPrice').textContent = avgGasPrice;
             } else {
-                riskLabel = 'High Risk';
-                riskColor = '#ff6759';
+                document.getElementById('firstTx').textContent = '-';
+                document.getElementById('lastTx').textContent = '-';
+                document.getElementById('uniqueInteractions').textContent = '0';
+                document.getElementById('avgGasPrice').textContent = '0';
             }
-            
-            const now = new Date();
-            const firstTx = new Date(now - Math.random() * 90 * 24 * 60 * 60 * 1000);
-            const lastTx = new Date(now - Math.random() * 7 * 24 * 60 * 60 * 1000);
-            
-            return {
-                txCount,
-                balance,
-                riskScore,
-                riskLabel,
-                riskColor,
-                firstTx: firstTx.toLocaleDateString(),
-                lastTx: lastTx.toLocaleDateString(),
-                riskFactors: generateRiskFactors(riskScore),
-                transactions: generateMockTransactions(),
-                chartData: generateChartData()
-            };
         }
 
-        function generateRiskFactors(riskScore) {
-            const factors = [];
+        function updateRiskScore(riskAnalysis) {
+            const { score, level, color } = riskAnalysis;
             
-            if (riskScore > 60) {
-                factors.push({ text: 'High transaction frequency', severity: 'high' });
-                factors.push({ text: 'Unusual gas patterns', severity: 'medium' });
-            }
-            if (riskScore > 40) {
-                factors.push({ text: 'Similar transaction timing', severity: 'medium' });
-            }
-            if (riskScore < 30) {
-                factors.push({ text: 'Natural usage patterns', severity: 'low' });
-                factors.push({ text: 'Diverse transaction types', severity: 'low' });
-            }
+            document.getElementById('riskScore').textContent = score;
+            document.getElementById('riskLabel').textContent = level;
             
-            factors.push({ text: 'Contract interactions: ' + (Math.floor(Math.random() * 20) + 5), severity: 'info' });
-            factors.push({ text: 'Unique counterparties: ' + (Math.floor(Math.random() * 50) + 10), severity: 'info' });
+            // Update risk circle color
+            const riskCircle = document.getElementById('riskCircle');
+            const gradient = score < 30 
+                ? 'conic-gradient(from 0deg, #4caf50 0%, #4caf50 100%)'
+                : score < 70 
+                    ? 'conic-gradient(from 0deg, #4caf50 0%, #ffeb3b 50%, #ffeb3b 100%)'
+                    : 'conic-gradient(from 0deg, #4caf50 0%, #ffeb3b 40%, #ff6759 100%)';
             
-            return factors;
-        }
-
-        function generateMockTransactions() {
-            const transactions = [];
-            for (let i = 0; i < 10; i++) {
-                transactions.push({
-                    hash: '0x' + Math.random().toString(16).substr(2, 16) + '...',
-                    amount: (Math.random() * 100).toFixed(4),
-                    timestamp: new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000).toLocaleDateString()
-                });
-            }
-            return transactions;
-        }
-
-        function generateChartData() {
-            const data = [];
-            const labels = [];
-            
-            for (let i = 29; i >= 0; i--) {
-                const date = new Date();
-                date.setDate(date.getDate() - i);
-                labels.push(date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
-                data.push(Math.floor(Math.random() * 20) + 1);
-            }
-            
-            return { labels, data };
+            riskCircle.style.background = gradient;
         }
 
         function updateRiskFactors(factors) {
@@ -700,49 +1026,110 @@
             
             factors.forEach(factor => {
                 const div = document.createElement('div');
-                div.style.padding = '8px 0';
-                div.style.borderBottom = '1px solid rgba(255, 255, 255, 0.1)';
+                div.className = 'risk-factor';
                 
-                let color = '#ffffff';
-                if (factor.severity === 'high') color = '#ff6759';
-                else if (factor.severity === 'medium') color = '#ffeb3b';
-                else if (factor.severity === 'low') color = '#4caf50';
-                else color = '#7877c6';
+                const indicatorClass = factor.severity === 'high' ? 'risk-high' :
+                                     factor.severity === 'medium' ? 'risk-medium' :
+                                     factor.severity === 'low' ? 'risk-low' : 'risk-info';
                 
-                div.innerHTML = `<span style="color: ${color};">• ${factor.text}</span>`;
-                container.appendChild(div);
-            });
-        }
-
-        function updateTransactions(transactions) {
-            const container = document.getElementById('transactionsList');
-            container.innerHTML = '';
-            
-            transactions.forEach(tx => {
-                const div = document.createElement('div');
-                div.className = 'transaction-item';
+                const pointsText = factor.points !== 0 ? ` (${factor.points > 0 ? '+' : ''}${factor.points})` : '';
+                
                 div.innerHTML = `
-                    <div class="tx-hash">${tx.hash}</div>
-                    <div class="tx-amount">${tx.amount} MON</div>
+                    <div style="display: flex; align-items: center;">
+                        <div class="risk-indicator ${indicatorClass}"></div>
+                        <span>${factor.text}</span>
+                    </div>
+                    <span style="font-size: 10px; color: rgba(255,255,255,0.5);">${pointsText}</span>
                 `;
                 container.appendChild(div);
             });
         }
 
-        function createActivityChart(chartData) {
+        function updateTransactionsList(transactions) {
+            const container = document.getElementById('transactionsList');
+            container.innerHTML = '';
+            
+            if (transactions.length === 0) {
+                container.innerHTML = '<p style="text-align: center; color: rgba(255,255,255,0.5); padding: 20px;">No recent transactions found</p>';
+                return;
+            }
+            
+            transactions.forEach(tx => {
+                const div = document.createElement('div');
+                div.className = 'transaction-item';
+                
+                const value = parseFloat(web3.utils.fromWei(tx.value, 'ether'));
+                const time = new Date(tx.timestamp * 1000);
+                const isOutgoing = tx.from.toLowerCase() === currentAddress.toLowerCase();
+                
+                div.innerHTML = `
+                    <div class="tx-hash" onclick="window.open('https://explorer.monad.xyz/tx/${tx.hash}', '_blank')">
+                        ${tx.hash.slice(0, 10)}...${tx.hash.slice(-8)}
+                    </div>
+                    <div class="tx-details">
+                        <div class="tx-value" style="color: ${isOutgoing ? '#ff6759' : '#4caf50'}">
+                            ${isOutgoing ? '-' : '+'}${value.toFixed(6)} MON
+                        </div>
+                        <div class="tx-time">${time.toLocaleString()}</div>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function createActivityChart(transactions) {
             const ctx = document.getElementById('activityChart').getContext('2d');
+            
+            // Clear existing chart
+            Chart.getChart(ctx)?.destroy();
+            
+            if (transactions.length === 0) {
+                ctx.fillStyle = 'rgba(255,255,255,0.5)';
+                ctx.textAlign = 'center';
+                ctx.fillText('No transaction data available', ctx.canvas.width/2, ctx.canvas.height/2);
+                return;
+            }
+            
+            // Group transactions by day
+            const dailyActivity = {};
+            const now = new Date();
+            
+            // Initialize last 30 days
+            for (let i = 29; i >= 0; i--) {
+                const date = new Date(now);
+                date.setDate(date.getDate() - i);
+                const key = date.toISOString().split('T')[0];
+                dailyActivity[key] = 0;
+            }
+            
+            // Count transactions per day
+            transactions.forEach(tx => {
+                const date = new Date(tx.timestamp * 1000).toISOString().split('T')[0];
+                if (dailyActivity.hasOwnProperty(date)) {
+                    dailyActivity[date]++;
+                }
+            });
+            
+            const labels = Object.keys(dailyActivity).map(date => {
+                return new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            });
+            const data = Object.values(dailyActivity);
             
             new Chart(ctx, {
                 type: 'line',
                 data: {
-                    labels: chartData.labels,
+                    labels,
                     datasets: [{
                         label: 'Daily Transactions',
-                        data: chartData.data,
+                        data,
                         borderColor: '#7877c6',
                         backgroundColor: 'rgba(120, 119, 198, 0.1)',
                         fill: true,
-                        tension: 0.4
+                        tension: 0.4,
+                        pointBackgroundColor: '#7877c6',
+                        pointBorderColor: '#ffffff',
+                        pointBorderWidth: 2,
+                        pointRadius: 4
                     }]
                 },
                 options: {
@@ -753,6 +1140,11 @@
                             labels: {
                                 color: '#ffffff'
                             }
+                        },
+                        title: {
+                            display: true,
+                            text: 'Transaction Activity (Last 30 Days)',
+                            color: '#ffffff'
                         }
                     },
                     scales: {
@@ -765,8 +1157,10 @@
                             }
                         },
                         y: {
+                            beginAtZero: true,
                             ticks: {
-                                color: '#ffffff'
+                                color: '#ffffff',
+                                stepSize: 1
                             },
                             grid: {
                                 color: 'rgba(255, 255, 255, 0.1)'
@@ -777,6 +1171,27 @@
             });
         }
 
+        function copyAddress() {
+            const addressText = document.getElementById('addressDisplay').textContent;
+            navigator.clipboard.writeText(addressText).then(() => {
+                const btn = event.target;
+                const originalText = btn.textContent;
+                btn.textContent = 'Copied!';
+                btn.style.background = 'rgba(76, 175, 80, 0.3)';
+                btn.style.borderColor = '#4caf50';
+                btn.style.color = '#4caf50';
+                
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                    btn.style.background = 'rgba(120, 119, 198, 0.2)';
+                    btn.style.borderColor = '#7877c6';
+                    btn.style.color = '#7877c6';
+                }, 2000);
+            }).catch(() => {
+                showAlert('Failed to copy address', 'error');
+            });
+        }
+
         function showAlert(message, type) {
             const existingAlert = document.querySelector('.alert');
             if (existingAlert) {
@@ -784,7 +1199,7 @@
             }
             
             const alert = document.createElement('div');
-            alert.className = `alert ${type === 'success' ? 'success' : ''}`;
+            alert.className = `alert ${type === 'success' ? 'success' : type === 'warning' ? 'warning' : ''}`;
             alert.textContent = message;
             
             document.querySelector('.search-container').appendChild(alert);
@@ -794,16 +1209,52 @@
             }, 5000);
         }
 
+        // Update network status periodically
+        async function updateNetworkStatus() {
+            try {
+                const blockNumber = await web3.eth.getBlockNumber();
+                document.getElementById('currentBlock').textContent = blockNumber.toLocaleString();
+                document.getElementById('networkStatus').className = 'status-dot';
+                document.getElementById('networkStatusText').textContent = 'Connected';
+            } catch (error) {
+                document.getElementById('networkStatus').className = 'status-dot offline';
+                document.getElementById('networkStatusText').textContent = 'Offline';
+            }
+        }
+
         // Handle Enter key in search input
         document.getElementById('addressInput').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
+            if (e.key === 'Enter' && !document.getElementById('analyzeBtn').disabled) {
                 analyzeAddress();
             }
         });
 
-        // Initialize particles on load
-        document.addEventListener('DOMContentLoaded', function() {
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', async function() {
             createParticles();
+            
+            const connected = await initWeb3();
+            if (connected) {
+                // Update network status every 30 seconds
+                setInterval(updateNetworkStatus, 30000);
+            } else {
+                showAlert('Unable to connect to Monad Testnet. Some features may not work properly.', 'warning');
+            }
+        });
+
+        // Add some example addresses for testing
+        const exampleAddresses = [
+            '0x742d35Cc6635C0532925a3b8D319D5DD3F6c323E',
+            '0xD8e1E7009802c914b0d39B31Fc1759A865b727B1',
+            '0x8ba1f109551bD432803012645Hac136c722Ba81B'
+        ];
+
+        // Add click handler for examples
+        document.addEventListener('click', function(e) {
+            if (e.target.classList.contains('example-address')) {
+                document.getElementById('addressInput').value = e.target.textContent;
+                analyzeAddress();
+            }
         });
     </script>
 </body>
