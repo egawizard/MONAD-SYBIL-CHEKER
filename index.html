@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Monad Testnet — Sybil Checker</title>
+  <meta name="description" content="Elegant Sybil Checker for Monad Testnet. Paste an address to analyze on-chain heuristics, rich stats, and professional charts.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Tailwind (CDN build) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Ethers v6 -->
+  <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.4/dist/ethers.min.js"></script>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <style>
+    :root{
+      --glass: rgba(255,255,255,0.08);
+      --glass-strong: rgba(255,255,255,0.14);
+      --accent: #8b5cf6; /* violet-500 */
+      --accent-2: #f59e0b; /* amber-500 */
+      --text: #ecedef;
+      --text-dim: #cbd5e1;
+    }
+    html, body { height: 100%; }
+    body { font-family: 'Outfit', system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, 'Apple Color Emoji','Segoe UI Emoji'; background: #0b0d12; color: var(--text);}    
+    /* Animated luxury gradient background */
+    .moving-gradient {
+      position: fixed; inset: -40vmax; z-index: -2;
+      background: radial-gradient(55vmax 55vmax at 20% 30%, rgba(139,92,246,0.25), transparent 70%),
+                  radial-gradient(60vmax 60vmax at 80% 20%, rgba(245,158,11,0.18), transparent 70%),
+                  radial-gradient(65vmax 65vmax at 50% 80%, rgba(20,184,166,0.18), transparent 70%),
+                  linear-gradient(120deg, #0b0d12, #0b0d12 40%);
+      filter: blur(40px);
+      animation: drift 40s ease-in-out infinite alternate;
+    }
+    @keyframes drift { 0%{transform: translate3d(0,0,0) scale(1);} 100%{ transform: translate3d(4vmax,-3vmax,0) scale(1.04);} }
+
+    /* Sparkle particle field */
+    .sparkles { position: fixed; inset: 0; pointer-events: none; z-index: -1; }
+    .glass { background: var(--glass); backdrop-filter: blur(14px); border: 1px solid rgba(255,255,255,0.08); }
+    .glow { box-shadow: 0 0 0 1px rgba(255,255,255,0.06), 0 6px 24px rgba(139,92,246,0.25), inset 0 1px rgba(255,255,255,0.06);}    
+    .btn { transition: transform .12s ease, box-shadow .2s ease; }
+    .btn:hover { transform: translateY(-1px); box-shadow: 0 10px 24px rgba(139,92,246,0.2); }
+    .pill { border-radius: 999px; }
+    .mono { font-variant-numeric: tabular-nums; font-feature-settings: 'tnum' 1; }
+    .gradient-text { background: linear-gradient(90deg, #fff, #e9d5ff, #fde68a); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .meter { height: 14px; border-radius: 999px; background: rgba(255,255,255,0.08); overflow: hidden; }
+    .meter > span { display: block; height: 100%; background: linear-gradient(90deg, #22c55e, #f59e0b, #ef4444); }
+
+    /* Fancy divider */
+    .divider { height: 1px; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.16), transparent); }
+
+    /* Responsive grid fixes */
+    @media (min-width: 1280px) { .wide-grid { grid-template-columns: 340px 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="moving-gradient"></div>
+  <canvas class="sparkles" id="sparkles"></canvas>
+
+  <header class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-6">
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-2xl bg-gradient-to-br from-violet-500/80 to-amber-400/80 glow"></div>
+        <div>
+          <h1 class="text-2xl sm:text-3xl font-extrabold gradient-text">Monad Testnet — Sybil Checker</h1>
+          <p class="text-sm text-slate-300/80">Paste an address · Real on-chain heuristics · Professional charts</p>
+        </div>
+      </div>
+      <a class="text-slate-300/80 text-sm hover:text-white transition" href="https://x.com/ega_2ez4crypto" target="_blank" rel="noopener">created by @ega_2ez4crypto</a>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <!-- Input Card -->
+    <section class="glass glow rounded-3xl p-6 sm:p-8">
+      <div class="flex flex-col lg:flex-row gap-6 lg:items-end">
+        <div class="flex-1">
+          <label class="text-sm text-slate-300/80">Monad Testnet Address</label>
+          <input id="addressInput" type="text" placeholder="0x…" class="mt-2 w-full pill bg-black/30 border border-white/10 focus:border-violet-500/60 outline-none p-4 text-base" />
+          <p class="text-xs text-slate-400 mt-2">Chain ID: <span class="mono">10143</span> · RPC: <span class="mono">https://testnet-rpc.monad.xyz</span></p>
+        </div>
+        <div class="flex gap-3">
+          <button id="quickScanBtn" class="btn pill px-5 py-3 bg-violet-600 hover:bg-violet-500 font-semibold">Quick Scan</button>
+          <button id="deepScanBtn" class="btn pill px-5 py-3 bg-amber-500 hover:bg-amber-400 font-semibold">Deep Scan</button>
+          <button id="sampleBtn" class="btn pill px-5 py-3 bg-slate-700 hover:bg-slate-600 font-semibold">Try Sample</button>
+        </div>
+      </div>
+      <div class="mt-5">
+        <div class="meter"><span id="progressBar" style="width:0%"></span></div>
+        <div class="flex justify-between text-xs text-slate-400 mt-2">
+          <span id="progressLabel">Idle</span>
+          <span id="blocksScanned">0 blocks</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- KPI Grid -->
+    <section class="grid gap-6 md:grid-cols-2 xl:grid-cols-4 mt-6">
+      <div class="glass glow rounded-3xl p-6">
+        <div class="flex items-center justify-between">
+          <p class="text-slate-300 text-sm">Balance</p>
+          <i data-lucide="wallet" class="w-5 h-5 opacity-70"></i>
+        </div>
+        <p class="mt-3 text-2xl font-semibold mono" id="kpiBalance">—</p>
+        <p class="text-xs text-slate-400" id="kpiBalanceUsd">&nbsp;</p>
+      </div>
+      <div class="glass glow rounded-3xl p-6">
+        <div class="flex items-center justify-between">
+          <p class="text-slate-300 text-sm">Tx Count (nonce)</p>
+          <i data-lucide="list-ordered" class="w-5 h-5 opacity-70"></i>
+        </div>
+        <p class="mt-3 text-2xl font-semibold mono" id="kpiTxCount">—</p>
+        <p class="text-xs text-slate-400">All-time outbound transactions</p>
+      </div>
+      <div class="glass glow rounded-3xl p-6">
+        <div class="flex items-center justify-between">
+          <p class="text-slate-300 text-sm">Address Age</p>
+          <i data-lucide="calendar" class="w-5 h-5 opacity-70"></i>
+        </div>
+        <p class="mt-3 text-2xl font-semibold mono" id="kpiAge">—</p>
+        <p class="text-xs text-slate-400" id="kpiFirstSeen">&nbsp;</p>
+      </div>
+      <div class="glass glow rounded-3xl p-6">
+        <div class="flex items-center justify-between">
+          <p class="text-slate-300 text-sm">Sybil Likelihood</p>
+          <i data-lucide="alert-triangle" class="w-5 h-5 opacity-70"></i>
+        </div>
+        <p class="mt-3 text-2xl font-semibold mono" id="kpiRisk">—</p>
+        <div class="meter mt-3"><span id="riskBar" style="width:0%"></span></div>
+        <p class="text-xs text-slate-400 mt-2" id="kpiRiskExplain">Run a scan to estimate risk</p>
+      </div>
+    </section>
+
+    <div class="divider my-8"></div>
+
+    <!-- Charts and Tables -->
+    <section class="grid gap-6 xl:wide-grid">
+      <div class="glass glow rounded-3xl p-6">
+        <div class="flex items-center justify-between">
+          <h3 class="font-semibold text-lg">Activity Timeline</h3>
+          <span class="text-xs text-slate-400">recent blocks</span>
+        </div>
+        <canvas id="activityChart" height="120"></canvas>
+      </div>
+      <div class="glass glow rounded-3xl p-6">
+        <div class="flex items-center justify-between">
+          <h3 class="font-semibold text-lg">Counterparties</h3>
+          <span class="text-xs text-slate-400" id="counterpartyCount">—</span>
+        </div>
+        <canvas id="counterpartyChart" height="120"></canvas>
+      </div>
+    </section>
+
+    <section class="grid gap-6 md:grid-cols-2 mt-6">
+      <div class="glass glow rounded-3xl p-6">
+        <h3 class="font-semibold text-lg mb-4">Contract Interactions</h3>
+        <ul id="contractList" class="text-sm text-slate-300/90 space-y-2 max-h-64 overflow-auto"></ul>
+      </div>
+      <div class="glass glow rounded-3xl p-6">
+        <h3 class="font-semibold text-lg mb-4">Recent Transactions (scanned)</h3>
+        <ul id="txList" class="text-sm text-slate-300/90 space-y-2 max-h-64 overflow-auto"></ul>
+      </div>
+    </section>
+
+    <section class="glass glow rounded-3xl p-6 mt-6">
+      <h3 class="font-semibold text-lg mb-3">Heuristic Notes</h3>
+      <ul class="list-disc pl-6 text-sm text-slate-300/90 space-y-1">
+        <li><span class="font-semibold">Address age</span>, activity span, and bursts of many tx in a short window may indicate automation.</li>
+        <li><span class="font-semibold">Low diversity</span> of counterparties and interacting with only a few contracts may suggest farming patterns.</li>
+        <li><span class="font-semibold">Inbound clustering</span> (funded by a single wallet) can be suspicious.</li>
+        <li>These are <span class="font-semibold">probabilistic</span> signals; manual review is still recommended.</li>
+      </ul>
+    </section>
+
+    <footer class="py-10 text-center text-slate-400 text-xs">
+      <p>Built for Monad Testnet · Single-file HTML · © <span class="mono" id="year"></span>. Credit: <a class="underline hover:text-white" target="_blank" rel="noopener" href="https://x.com/ega_2ez4crypto">@ega_2ez4crypto</a></p>
+    </footer>
+  </main>
+
+  <script>
+    // ====== Sparkle background ======
+    ;(function sparkle(){
+      const c = document.getElementById('sparkles');
+      const ctx = c.getContext('2d');
+      let W, H; const particles = []; const COUNT = 120;
+      function resize(){ W = c.width = innerWidth; H = c.height = innerHeight; }
+      addEventListener('resize', resize, {passive:true}); resize();
+      for(let i=0;i<COUNT;i++){
+        particles.push({
+          x: Math.random()*W,
+          y: Math.random()*H,
+          r: Math.random()*1.6+0.4,
+          a: Math.random()*Math.PI*2,
+          s: Math.random()*0.4+0.1
+        })
+      }
+      function draw(){
+        ctx.clearRect(0,0,W,H);
+        for(const p of particles){
+          p.a += p.s*0.01; p.x += Math.cos(p.a)*0.2; p.y += Math.sin(p.a)*0.2;
+          if(p.x<0) p.x=W; if(p.x>W) p.x=0; if(p.y<0) p.y=H; if(p.y>H) p.y=0;
+          ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+          ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.fill();
+        }
+        requestAnimationFrame(draw);
+      }
+      draw();
+    })();
+
+    // ====== Icons ======
+    lucide.createIcons();
+
+    // ====== Ethers & RPC Setup ======
+    const RPC_URL = 'https://testnet-rpc.monad.xyz';
+    const CHAIN_ID = 10143;
+    const provider = new ethers.JsonRpcProvider(RPC_URL, CHAIN_ID);
+
+    // ====== UI El refs ======
+    const qs = (s)=>document.querySelector(s);
+    const addressInput = qs('#addressInput');
+    const quickBtn = qs('#quickScanBtn');
+    const deepBtn = qs('#deepScanBtn');
+    const sampleBtn = qs('#sampleBtn');
+    const progressBar = qs('#progressBar');
+    const progressLabel = qs('#progressLabel');
+    const blocksScanned = qs('#blocksScanned');
+
+    const kpiBalance = qs('#kpiBalance');
+    const kpiBalanceUsd = qs('#kpiBalanceUsd');
+    const kpiTxCount = qs('#kpiTxCount');
+    const kpiAge = qs('#kpiAge');
+    const kpiFirstSeen = qs('#kpiFirstSeen');
+    const kpiRisk = qs('#kpiRisk');
+    const kpiRiskExplain = qs('#kpiRiskExplain');
+    const riskBar = qs('#riskBar');
+
+    const txList = qs('#txList');
+    const contractList = qs('#contractList');
+    const counterpartyCount = qs('#counterpartyCount');
+
+    const yearEl = qs('#year'); yearEl.textContent = new Date().getFullYear();
+
+    // ====== Chart.js setup ======
+    const activityCtx = document.getElementById('activityChart');
+    const counterpartyCtx = document.getElementById('counterpartyChart');
+    const activityChart = new Chart(activityCtx, {
+      type: 'line',
+      data: { labels: [], datasets: [{ label: 'Tx per block window', data: [], tension: 0.35, borderWidth: 2, fill: true }]},
+      options: { plugins: {legend: {display:false}}, scales: { x: {ticks:{color:'#94a3b8'}}, y:{ticks:{color:'#94a3b8'}}}}
+    });
+    const counterpartyChart = new Chart(counterpartyCtx, {
+      type: 'doughnut',
+      data: { labels: [], datasets: [{ data: [] }]},
+      options: { plugins:{legend:{labels:{color:'#cbd5e1'}}} }
+    });
+
+    // ====== Helpers ======
+    const sleep = (ms)=> new Promise(r=>setTimeout(r,ms));
+    const fmt = (n, d=4) => Number(n).toLocaleString(undefined, {maximumFractionDigits: d});
+    const weiToEth = (wei)=> Number(ethers.formatEther(wei));
+
+    function updateProgress(pct, label, scanned){
+      progressBar.style.width = `${pct}%`;
+      progressLabel.textContent = label || '';
+      blocksScanned.textContent = scanned ? `${scanned} blocks` : '';
+    }
+
+    function scoreExplanation(parts){
+      return parts.filter(Boolean).join(' · ');
+    }
+
+    // ====== Core Scan ======
+    async function scanAddress(addr, {depth=300, step=5}={}){
+      txList.innerHTML = '';
+      contractList.innerHTML = '';
+      counterpartyCount.textContent = '—';
+      updateProgress(0, 'Preparing…');
+
+      // Basic facts
+      const [rawBalance, txCount, code] = await Promise.all([
+        provider.getBalance(addr),
+        provider.getTransactionCount(addr, 'latest'),
+        provider.getCode(addr)
+      ]);
+      const isContract = code && code !== '0x';
+
+      kpiBalance.textContent = `${fmt(weiToEth(rawBalance), 6)} MON`;
+      kpiBalanceUsd.textContent = '(testnet)';
+      kpiTxCount.textContent = String(txCount);
+
+      // Block range
+      const latest = await provider.getBlockNumber();
+      const start = Math.max(0, latest - depth);
+
+      const counterparties = new Map(); // addr -> count
+      const contracts = new Map(); // contract addr -> count
+      const timestamps = []; // for activity chart
+      const txs = []; // captured txs
+      let firstSeenTs = null;
+
+      // Sweep blocks in chunks
+      const CHUNK = 25;
+      let scanned = 0;
+      for(let from = latest; from >= start; from -= CHUNK){
+        const to = Math.max(start, from - CHUNK + 1);
+        const blocks = await Promise.all(
+          Array.from({length: from-to+1}, (_,i)=> provider.getBlock(from - i, true)) // include txs
+        );
+        for(const b of blocks){
+          if(!b) continue;
+          // Count activity per block
+          let perBlock = 0;
+          for(const t of (b.transactions||[])){
+            if(!t) continue;
+            if((t.from && t.from.toLowerCase()===addr.toLowerCase()) || (t.to && t.to.toLowerCase()===addr.toLowerCase())){
+              perBlock++;
+              txs.push({ hash: t.hash, from: t.from, to: t.to, value: t.value, gasPrice: t.gasPrice, blockNumber: t.blockNumber, timestamp: b.timestamp });
+              if(!firstSeenTs) firstSeenTs = b.timestamp;
+              const other = (t.from && t.from.toLowerCase()===addr.toLowerCase()) ? (t.to||'0x0') : t.from;
+              if(other){ counterparties.set(other, (counterparties.get(other)||0)+1); }
+            }
+          }
+          timestamps.push({x: new Date(b.timestamp*1000), y: perBlock});
+        }
+        scanned += (from-to+1);
+        const pct = Math.round(((latest - from + CHUNK) / (latest - start + 1)) * 100);
+        updateProgress(Math.min(100,pct), `Scanning blocks ${to}–${from}`, scanned);
+        await sleep(10);
+      }
+
+      // Enrich: detect contract addresses among counterparties (sampled)
+      const uniqueCounterparties = Array.from(counterparties.keys()).slice(0, 60);
+      const codes = await Promise.all(uniqueCounterparties.map(a=>provider.getCode(a)));
+      uniqueCounterparties.forEach((a,i)=>{ if(codes[i] && codes[i] !== '0x'){ contracts.set(a, (contracts.get(a)||0) + (counterparties.get(a)||0)); }});
+
+      // KPIs derived
+      const firstSeenDate = firstSeenTs ? new Date(firstSeenTs*1000) : null;
+      if(firstSeenDate){
+        const days = Math.max(1, Math.round((Date.now()-firstSeenDate.getTime())/86400000));
+        kpiAge.textContent = days + ' day' + (days>1?'s':'');
+        kpiFirstSeen.textContent = 'since ' + firstSeenDate.toLocaleString();
+      } else {
+        kpiAge.textContent = '—';
+        kpiFirstSeen.textContent = 'No activity in scanned range';
+      }
+
+      // Populate lists
+      txs.sort((a,b)=> b.blockNumber - a.blockNumber);
+      txList.innerHTML = txs.slice(0, 50).map(t=>{
+        const dir = t.from.toLowerCase()===addr.toLowerCase()? '→' : '←';
+        const other = t.from.toLowerCase()===addr.toLowerCase()? (t.to||'0x0') : t.from;
+        return `<li class="flex items-center justify-between gap-3">
+          <span class="mono text-slate-300/90">#${t.blockNumber} ${dir} ${other?.slice(0,6)}…${other?.slice(-4)}</span>
+          <span class="mono text-slate-400">${fmt(weiToEth(t.value),6)} MON</span>
+        </li>`
+      }).join('');
+
+      contractList.innerHTML = Array.from(contracts.entries()).sort((a,b)=>b[1]-a[1]).slice(0,30).map(([a,c])=>{
+        return `<li class="flex items-center justify-between"><span class="mono">${a.slice(0,8)}…${a.slice(-6)}</span><span class="mono text-slate-400">${c} hits</span></li>`;
+      }).join('');
+
+      // Charts
+      activityChart.data.labels = timestamps.map(p=> p.x.toLocaleTimeString());
+      activityChart.data.datasets[0].data = timestamps.map(p=> p.y);
+      activityChart.update();
+
+      const topCounterparties = Array.from(counterparties.entries()).sort((a,b)=>b[1]-a[1]).slice(0,8);
+      counterpartyChart.data.labels = topCounterparties.map(([a])=> a.slice(0,6)+'…'+a.slice(-4));
+      counterpartyChart.data.datasets[0].data = topCounterparties.map(([_,c])=> c);
+      counterpartyChart.update();
+      counterpartyCount.textContent = `${counterparties.size} unique`;
+
+      // Heuristic Sybil score (0 good → 100 risky)
+      const features = {
+        txCountAllTime: Number(txCount||0),
+        observedTx: txs.length,
+        counterparties: counterparties.size,
+        contractHits: Array.from(contracts.values()).reduce((a,b)=>a+b,0),
+        ageDays: firstSeenTs ? Math.max(1, Math.round((Date.now()/1000-firstSeenTs)/86400)) : null,
+        burstMax: Math.max(0, ...timestamps.map(p=>p.y)),
+        fundedBySingle: (()=>{
+          const inbound = txs.filter(t=> t.to && t.to.toLowerCase()===addr.toLowerCase()).map(t=>t.from);
+          const uniq = new Set(inbound);
+          return inbound.length>0 && uniq.size===1;
+        })()
+      };
+
+      let score = 0; const notes = [];
+      if(features.ageDays===null){ score += 35; notes.push('No activity in scanned window'); }
+      else if(features.ageDays < 3){ score += 25; notes.push('Very new address'); }
+      else if(features.ageDays < 14){ score += 12; notes.push('Young address'); }
+
+      if(features.counterparties <= 2){ score += 20; notes.push('Low counterparty diversity'); }
+      else if(features.counterparties <= 5){ score += 12; notes.push('Limited counterparties'); }
+
+      if(features.burstMax >= 5){ score += 18; notes.push('High burst activity'); }
+      else if(features.burstMax >= 3){ score += 10; notes.push('Burst activity'); }
+
+      if(features.fundedBySingle){ score += 12; notes.push('Funded by single source'); }
+
+      if(features.contractHits <= 2 && features.observedTx >= 4){ score += 10; notes.push('Few contracts interacted'); }
+
+      score = Math.min(100, Math.max(0, Math.round(score)));
+      kpiRisk.textContent = score + '%';
+      kpiRiskExplain.textContent = scoreExplanation(notes) || 'Healthy diversity & history';
+      riskBar.style.width = score + '%';
+
+      updateProgress(100, 'Complete', scanned);
+    }
+
+    function isAddressLike(v){ return /^0x[a-fA-F0-9]{40}$/.test(v.trim()); }
+
+    async function startScan(mode){
+      const input = addressInput.value.trim();
+      if(!isAddressLike(input)){
+        alert('Please paste a valid EVM address (0x…)'); return;
+      }
+      try{
+        quickBtn.disabled = deepBtn.disabled = sampleBtn.disabled = true;
+        const depth = mode==='deep' ? 2000 : 320;
+        await scanAddress(input, { depth });
+      }catch(err){
+        console.error(err);
+        alert('Scan failed: '+ (err?.message||err));
+      }finally{
+        quickBtn.disabled = deepBtn.disabled = sampleBtn.disabled = false;
+      }
+    }
+
+    // ====== Events ======
+    quickBtn.addEventListener('click', ()=> startScan('quick'));
+    deepBtn.addEventListener('click', ()=> startScan('deep'));
+    sampleBtn.addEventListener('click', ()=>{
+      addressInput.value = '0x0000000000000000000000000000000000000000';
+    });
+
+  </script>
+</body>
+</html>
