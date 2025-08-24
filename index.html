@@ -1,92 +1,185 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Sybil Checker — MONAD Testnet (CORS-Bypass)</title>
-<meta name="description" content="On-chain Sybil risk scanner for the MONAD testnet with CORS-bypass proxy. Paste address and scan full history.">
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Monad Address Checker — Testnet</title>
+<meta name="description" content="Address stats, volume, gas, day-streak and charts for MONAD Testnet (Chain ID 10143)."/>
+<!-- Ethers (v6 UMD), D3, Chart.js -->
 <script src="https://cdn.jsdelivr.net/npm/ethers@6.7.1/dist/ethers.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
 <style>
-:root{--bg:#080a12;--text:#e8ecff;--muted:#a6b0d9;--ok:#10d7a3;--danger:#ff6b6b}
-html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:ui-sans-serif,system-ui}
-canvas#bg{position:fixed;inset:0;z-index:-1;background:radial-gradient(1200px 800px at 70% 20%,#0a1028 0%,#080a12 60%,#05070f 100%)}
-.wrap{max-width:1180px;margin:24px auto;padding:0 16px 80px}
-.card{background:linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02));border:1px solid #1b2442;border-radius:18px;padding:16px;box-shadow:0 10px 30px #0008, inset 0 1px 0 #ffffff10;backdrop-filter:blur(8px)}
-.title{font-weight:700;letter-spacing:.3px;font-size:26px;margin:6px 0 12px}
-.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-input,button{border-radius:12px;padding:12px 14px;border:1px solid #29345f;background:#0e1430;color:#e8ecff}
-button{background:linear-gradient(135deg,#22d3ee,#a78bfa);border:none;color:#041018;font-weight:700;cursor:pointer}
-.mono{font-family:ui-monospace,Menlo,Consolas,monospace}
-.grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
-.stat{border:1px solid #1a2246;padding:14px;border-radius:14px;background:rgba(15,20,40,.5)}
-.label{font-size:12px;color:var(--muted)} .value{font-size:20px;font-weight:700;margin-top:6px}
-.risk.low{color:var(--ok)}.risk.med{color:#ffd166}.risk.high{color:var(--danger)}
-.progress{height:8px;background:#0e1430;border:1px solid #27325d;border-radius:999px;overflow:hidden}
-.progress>b{display:block;height:100%;background:linear-gradient(90deg,#22d3ee,#a78bfa)}
-.legend{display:flex;gap:10px;align-items:center}.dot{width:10px;height:10px;border-radius:50%;display:inline-block}
-.self{background:#93c5fd}.in{background:#23d1a2}.out{background:#ff6b6b}.contract{background:#f59e0b}
-#graph{width:100%;height:640px;border-radius:18px;border:1px solid #1b2442;background:linear-gradient(180deg,rgba(10,14,32,.7),rgba(10,14,32,.4))}
-.notice{font-size:12px;color:#9fb0ff}
+:root{
+  --bg:#070812; --panel:#0b1220cc; --muted:#9fb0ff; --text:#eaf0ff;
+  --accent1:#6ee7ff; --accent2:#a78bfa; --ok:#10d7a3; --danger:#ff6b6b;
+  --card-border:#10162b;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial}
+canvas#bg{position:fixed;inset:0;z-index:-2}
+.container{max-width:1180px;margin:28px auto;padding:0 16px 80px}
+.header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+.brand{display:flex;gap:12px;align-items:center}
+.logo{width:44px;height:44px;border-radius:10px;background:linear-gradient(135deg,var(--accent1),var(--accent2));display:flex;align-items:center;justify-content:center;font-weight:800;color:#021128}
+.h1{font-size:20px;font-weight:700}
+.controls{display:flex;gap:10px;align-items:center}
+.card{background:linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,.01));border:1px solid var(--card-border);border-radius:14px;padding:14px;box-shadow:0 10px 30px #0008;backdrop-filter:blur(6px)}
+.toolbar{display:flex;gap:10px;align-items:center}
+.input{flex:1;min-width:220px;background:#0d1526;border:1px solid #232b49;padding:12px 14px;border-radius:12px;color:var(--text)}
+.btn{padding:10px 14px;border-radius:12px;border:none;cursor:pointer;font-weight:700}
+.btn.primary{background:linear-gradient(135deg,var(--accent1),var(--accent2));color:#021128}
+.btn.ghost{background:transparent;border:1px solid #243052;color:var(--text)}
+.grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:12px}
+.stat{padding:12px;border-radius:10px;border:1px solid #17203a;background:linear-gradient(180deg, rgba(255,255,255,.01), transparent)}
+.stat .label{font-size:12px;color:var(--muted)}
+.stat .value{font-size:18px;font-weight:700;margin-top:6px}
+.small{font-size:12px;color:var(--muted)}
+.row{display:flex;gap:10px;align-items:center}
+.progress{height:8px;background:#0b1324;border-radius:999px;overflow:hidden;border:1px solid #18263f;margin-top:8px}
+.progress > b{display:block;height:100%;background:linear-gradient(90deg,var(--accent1),var(--accent2));width:0%}
+.panel-wide{margin-top:18px;padding:12px;border-radius:12px;border:1px solid #17203a}
+.legend{display:flex;gap:8px;align-items:center;margin-top:8px}
+.legend .dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+.dot.in{background:var(--ok)}.dot.out{background:var(--danger)}.dot.self{background:#93c5fd}
+.footer{opacity:.7;margin-top:18px;font-size:13px}
+.code{font-family:ui-monospace,monospace;font-size:12px;color:#cfe6ff}
+#graph{width:100%;height:520px;border-radius:12px;background:linear-gradient(180deg, rgba(255,255,255,.01), rgba(255,255,255,.005));border:1px solid #12203a}
+.note{font-size:12px;color:var(--muted);margin-top:8px}
+.warning{color:#ffd166;font-weight:700}
+@media(max-width:880px){.grid-3{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
 <canvas id="bg"></canvas>
 
-<div class="wrap">
+<div class="container">
+  <div class="header">
+    <div class="brand">
+      <div class="logo">M</div>
+      <div>
+        <div class="h1">Monad Address Checker — Testnet</div>
+        <div class="small">Chain ID: <span class="code">10143</span> · RPC: <span class="code">https://testnet-rpc.monad.xyz</span></div>
+      </div>
+    </div>
+    <div class="controls">
+      <div class="small">Credit: <a href="https://x.com/ega_2ez4crypto" target="_blank" style="color:var(--accent1)">@ega_2ez4crypto</a></div>
+    </div>
+  </div>
+
   <div class="card">
-    <div class="title">Sybil Checker — MONAD Testnet</div>
-    <div class="row">
-      <input id="addr" placeholder="Paste a MONAD testnet address (0x…)" class="mono" style="flex:1" />
-      <button id="scanBtn">Scan</button>
-      <button id="exportBtn">Export</button>
-    </div>
-    <div class="row" style="margin-top:8px">
-      <label class="row" style="gap:6px"><input id="genesisMode" type="checkbox" /> <span>Scan from genesis (cache & resume)</span></label>
-      <label class="row" style="gap:6px">Chunk (blocks): <input id="chunk" type="number" min="100" value="300" style="width:100px"></label>
-      <label class="row" style="gap:6px">Parallel: <input id="par" type="number" min="1" max="12" value="6" style="width:80px"></label>
-      <label class="row" style="gap:6px">Logs chunk: <input id="logChunk" type="number" min="1000" value="8000" style="width:100px"></label>
+    <div class="toolbar">
+      <input id="addr" class="input" placeholder="Paste MONAD testnet address (0x...)" />
+      <button id="scanBtn" class="btn primary">Scan</button>
+      <button id="exportBtn" class="btn ghost">Export JSON</button>
     </div>
 
-    <div class="grid-3" style="margin-top:12px">
-      <div class="stat"><div class="label">Balance</div><div id="balance" class="value mono">—</div></div>
-      <div class="stat"><div class="label">Tx Count (nonce)</div><div id="nonce" class="value mono">—</div></div>
-      <div class="stat"><div class="label">Sybil Risk</div><div id="risk" class="value risk low">—</div></div>
+    <div style="display:flex;gap:12px;align-items:center;margin-top:10px;flex-wrap:wrap">
+      <label class="row small"><input type="checkbox" id="genesis" /> Full History (Genesis) — <span class="warning">&nbsp;heavy</span></label>
+      <label class="row small">Blocks chunk <input id="chunk" type="number" value="400" style="width:90px;margin-left:6px" /></label>
+      <label class="row small">Logs chunk <input id="logchunk" type="number" value="8000" style="width:90px;margin-left:6px" /></label>
+      <div style="margin-left:auto" class="small">Using CORS proxy: <span class="code">corsproxy.io</span> (you can change in code)</div>
     </div>
-    <div class="grid-3" style="margin-top:8px">
-      <div class="stat"><div class="label">Unique Counterparties</div><div id="peers" class="value mono">—</div></div>
-      <div class="stat"><div class="label">Inflow / Outflow (native)</div><div id="flow" class="value mono">—</div></div>
-      <div class="stat"><div class="label">First Seen / Last Seen</div><div id="seen" class="value mono">—</div></div>
+
+    <div class="grid-3">
+      <div class="stat">
+        <div class="label">Balance</div>
+        <div id="balance" class="value mono">— MON</div>
+        <div class="small" id="nonceLine">Tx Count (nonce): —</div>
+      </div>
+      <div class="stat">
+        <div class="label">Total Volume (In / Out)</div>
+        <div id="volume" class="value mono">— / — MON</div>
+        <div class="small">Total native transfers & sum</div>
+      </div>
+      <div class="stat">
+        <div class="label">Gas Spent (approx)</div>
+        <div id="gas" class="value mono">— MON</div>
+        <div class="small">Gas*price across scanned tx (approx)</div>
+      </div>
     </div>
-    <div style="margin-top:10px">
-      <div class="label">Progress</div><div class="progress"><b id="prog" style="width:0%"></b></div>
-      <div class="notice">Using CORS proxy: <code>corsproxy.io</code> → testnet-rpc.monad.xyz (Chain ID 10143)</div>
+
+    <div class="grid-3" style="margin-top:10px">
+      <div class="stat">
+        <div class="label">Active Days</div>
+        <div id="activeDays" class="value mono">—</div>
+        <div class="small">Unique calendar days with txs</div>
+      </div>
+      <div class="stat">
+        <div class="label">Current Day Streak</div>
+        <div id="streak" class="value mono">—</div>
+        <div class="small">Longest consecutive active-day streak</div>
+      </div>
+      <div class="stat">
+        <div class="label">First Seen / Last Seen</div>
+        <div id="seen" class="value mono">—</div>
+        <div class="small">Timestamps from scanned history</div>
+      </div>
+    </div>
+
+    <div>
+      <div class="label" style="margin-top:12px">Scan Progress</div>
+      <div class="progress"><b id="prog"></b></div>
     </div>
   </div>
 
-  <div class="card" style="margin-top:16px">
-    <div class="title">Activity Timeline</div>
-    <canvas id="timeline" height="260"></canvas>
+  <div class="panel-wide card" style="margin-top:18px">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <div style="font-weight:700">Activity Timeline</div>
+      <div class="small">Daily txs & volume (native)</div>
+    </div>
+    <canvas id="timeline" height="220" style="margin-top:12px"></canvas>
   </div>
 
-  <div class="card" style="margin-top:16px">
-    <div class="title">Network Graph</div>
-    <div id="graph"></div>
+  <div class="panel-wide card" style="margin-top:14px">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <div style="font-weight:700">Counterparty Graph</div>
+      <div class="small">Immediate counterparties (aggregated)</div>
+    </div>
+    <div id="graph" style="margin-top:12px"></div>
+    <div class="legend">
+      <div><span class="dot self"></span> Target</div>
+      <div><span class="dot in"></span> Inflow</div>
+      <div><span class="dot out"></span> Outflow</div>
+    </div>
   </div>
 
-  <div class="notice" style="margin-top:8px">
-    Credits: created by <a href="https://x.com/ega_2ez4crypto" target="_blank">@ega_2ez4crypto</a> · UI inspired by Arkham.
+  <div class="footer">
+    Built for MONAD Testnet · Chain ID 10143 · RPC: <span class="code">https://testnet-rpc.monad.xyz</span>
   </div>
 </div>
 
 <script>
-/* ===== Soft animated background ===== */
-(()=>{const c=document.getElementById('bg'),x=c.getContext('2d');let w=innerWidth,h=innerHeight;c.width=w;c.height=h;addEventListener('resize',()=>{w=innerWidth;h=innerHeight;c.width=w;c.height=h});const P=Array.from({length:120},()=>({x:Math.random()*w,y:Math.random()*h,vx:(Math.random()-.5)*.35,vy:(Math.random()-.5)*.35,r:Math.random()*2+0.6}));(function d(){x.clearRect(0,0,w,h);P.forEach(p=>{p.x+=p.vx;p.y+=p.vy;if(p.x<0||p.x>w)p.vx*=-1;if(p.y<0||p.y>h)p.vy*=-1;x.fillStyle='rgba(173,199,255,.55)';x.beginPath();x.arc(p.x,p.y,p.r,0,6.283);x.fill()});requestAnimationFrame(d)})()})();
+/* ---------------- Animated background ---------------- */
+(() => {
+  const c = document.getElementById('bg'), ctx = c.getContext('2d');
+  let w = innerWidth, h = innerHeight; c.width = w; c.height = h;
+  addEventListener('resize', () => { w = innerWidth; h = innerHeight; c.width = w; c.height = h;});
+  const orbs = Array.from({length:90}, () => ({x:Math.random()*w, y:Math.random()*h, vx:(Math.random()-0.5)*0.3, vy:(Math.random()-0.5)*0.3, r: Math.random()*1.8+0.6}));
+  function frame() {
+    ctx.clearRect(0,0,w,h);
+    // subtle radial glows
+    const cx = w*0.6, cy = h*0.4;
+    const g = ctx.createRadialGradient(cx,cy,0,cx,cy,700);
+    g.addColorStop(0, 'rgba(23,28,58,.35)'); g.addColorStop(1, 'transparent');
+    ctx.fillStyle = g; ctx.fillRect(0,0,w,h);
+    orbs.forEach(o=>{
+      o.x += o.vx; o.y += o.vy;
+      if(o.x<0||o.x>w) o.vx *= -1; if(o.y<0||o.y>h) o.vy *= -1;
+      ctx.beginPath(); ctx.fillStyle = 'rgba(160,190,255,0.45)'; ctx.arc(o.x,o.y,o.r,0,Math.PI*2); ctx.fill();
+    });
+    requestAnimationFrame(frame);
+  }
+  frame();
+})();
 
-/* ====== JSON-RPC via CORS proxy ====== */
+/* ---------------- RPC CONFIG ----------------
+We use the provided RPC via a CORS proxy so static hosting works.
+Change PROXY_URL to your own relay / remove proxy if RPC supports CORS.
+*/
 const RPC_ORIGIN = "https://testnet-rpc.monad.xyz";
-const PROXY_URL  = "https://corsproxy.io/?" + encodeURIComponent(RPC_ORIGIN);
+const PROXY_URL = "https://corsproxy.io/?" + encodeURIComponent(RPC_ORIGIN);
 let rpcId = 1;
 async function rpc(method, params=[]) {
   const res = await fetch(PROXY_URL, {
@@ -94,182 +187,310 @@ async function rpc(method, params=[]) {
     headers: {"content-type":"application/json"},
     body: JSON.stringify({jsonrpc:"2.0", id: rpcId++, method, params})
   });
-  if(!res.ok){ throw new Error(`RPC HTTP ${res.status}`); }
+  if(!res.ok) throw new Error('RPC HTTP ' + res.status);
   const j = await res.json();
-  if(j.error){ throw new Error(j.error.message || "RPC error"); }
+  if(j.error) throw new Error(j.error.message || 'RPC error');
   return j.result;
 }
 
-/* Thin helpers wrapping RPC (ethers utils only for formatting) */
-const fmtEth = (wei)=> ethers.formatEther(wei);
-const hexToBig = (h)=> (h ? BigInt(h) : 0n);
-const hexToNum = (h)=> parseInt(h,16);
-const toHex = (n)=> '0x' + n.toString(16);
+/* ---------------- small helpers ---------------- */
+const hexToNum = h => parseInt(h,16);
+const hexToBig = h => (h ? BigInt(h) : 0n);
+const toHex = n => '0x' + n.toString(16);
+const fmt = v => (typeof v === 'bigint') ? Number(ethers.formatEther(v)) : (Number(v) || 0);
 
-async function getBlockNumber(){ return hexToNum(await rpc("eth_blockNumber")); }
-async function getBalance(address){ return hexToBig(await rpc("eth_getBalance",[address,"latest"])); }
-async function getNonce(address){ return hexToNum(await rpc("eth_getTransactionCount",[address,"latest"])); }
-async function getCode(address){ return await rpc("eth_getCode",[address,"latest"]); }
-async function getBlock(num){ return await rpc("eth_getBlockByNumber",[toHex(num), false]); }
-async function getBlockWithTxs(num){ return await rpc("eth_getBlockByNumber",[toHex(num), true]); }
-async function getLogs(from,to,topics){ return await rpc("eth_getLogs",[{fromBlock:toHex(from), toBlock:toHex(to), topics}]); }
+/* quick wrappers */
+async function getBlockNumber(){ return hexToNum(await rpc('eth_blockNumber')); }
+async function getBalance(addr){ return hexToBig(await rpc('eth_getBalance',[addr,'latest'])); }
+async function getNonce(addr){ return hexToNum(await rpc('eth_getTransactionCount',[addr,'latest'])); }
+async function getCode(addr){ return await rpc('eth_getCode',[addr,'latest']); }
+async function getBlock(num){ return await rpc('eth_getBlockByNumber',[toHex(num), false]); }
+async function getBlockWithTxs(num){ return await rpc('eth_getBlockByNumber',[toHex(num), true]); }
+async function getLogs(from,to,topics){ return await rpc('eth_getLogs', [{fromBlock: toHex(from), toBlock: toHex(to), topics}]); }
 
-/* ====== IndexedDB cache (for Genesis Mode) ====== */
-const DB_NAME='monad-sybil-db'; const STORE='scans';
-function idb(){return new Promise((res,rej)=>{const r=indexedDB.open(DB_NAME,1);r.onupgradeneeded=()=>r.result.createObjectStore(STORE,{keyPath:'key'});r.onerror=()=>rej(r.error);r.onsuccess=()=>res(r.result)});}
-async function dbGet(key){const db=await idb();return new Promise((res,rej)=>{const t=db.transaction(STORE).objectStore(STORE).get(key);t.onsuccess=()=>res(t.result?.value||null);t.onerror=()=>rej(t.error)})}
-async function dbPut(key,val){const db=await idb();return new Promise((res,rej)=>{const t=db.transaction(STORE,'readwrite').objectStore(STORE).put({key,value:val});t.oncomplete=()=>res();t.onerror=()=>rej(t.error)})}
+/* ---------------- IndexedDB cache (minimal) ---------------- */
+const DB_NAME='monad-stats-db', STORE='addr';
+function openDB(){ return new Promise((res,rej)=>{ const r = indexedDB.open(DB_NAME,1); r.onupgradeneeded = ()=> r.result.createObjectStore(STORE,{keyPath:'key'}); r.onerror=()=> rej(r.error); r.onsuccess=()=> res(r.result); }); }
+async function dbGet(key){ const db = await openDB(); return new Promise((res,rej)=>{ const tx = db.transaction(STORE).objectStore(STORE).get(key); tx.onsuccess = ()=> res(tx.result?.value || null); tx.onerror = ()=> rej(tx.error); }); }
+async function dbPut(key,value){ const db = await openDB(); return new Promise((res,rej)=>{ const tx = db.transaction(STORE,'readwrite').objectStore(STORE).put({key,value}); tx.oncomplete = ()=> res(); tx.onerror = ()=> rej(tx.error); }); }
 
-/* ====== UI refs ====== */
-const ui={addr:addr,scan:scanBtn,export:exportBtn,prog:prog,balance:balance,nonce:nonce,risk:risk,peers:peers,flow:flow,seen:seen,genesis:genesisMode,chunk:chunk,par:par,logChunk:logChunk};
-const dayKey=ts=>new Date(ts*1000).toISOString().slice(0,10);
-let timelineChart=null,lastReport=null;
+/* ---------------- UI refs ---------------- */
+const ui = {
+  addr: document.getElementById('addr'),
+  scan: document.getElementById('scanBtn'),
+  export: document.getElementById('exportBtn'),
+  genesis: document.getElementById('genesis'),
+  chunk: document.getElementById('chunk'),
+  logchunk: document.getElementById('logchunk'),
+  prog: document.getElementById('prog'),
+  balance: document.getElementById('balance'),
+  nonceLine: document.getElementById('nonceLine'),
+  volume: document.getElementById('volume'),
+  gas: document.getElementById('gas'),
+  activeDays: document.getElementById('activeDays'),
+  streak: document.getElementById('streak'),
+  seen: document.getElementById('seen'),
+  peersCount: document.getElementById('peers'),
+};
 
-/* ====== Sybil heuristic ====== */
-function sybilScore(s){let score=0;const ageDays=(Date.now()/1000-s.firstSeen)/86400, small=s.smallTxs/(s.totalNativeTxs||1), peers=Object.keys(s.peers).length, outRatio=s.outCount/(s.inCount+1); if(ageDays<7)score+=20; if(peers>25&&small>0.7)score+=30; if(outRatio>2)score+=20; if(s.twoWayPairs>6)score+=15; if(s.bursts>2)score+=15; let label='Low',cls='low'; if(score>=65){label='High';cls='high'} else if(score>=35){label='Medium';cls='med'} return{score,label,cls};}
+/* charts */
+let timelineChart = null;
 
-/* ====== Scanner ====== */
-async function scan(address){
-  if(!ethers.isAddress(address)) throw new Error("Invalid address.");
-  ui.prog.style.width='0%';
+/* ---------------- SyT: Simple stats scanner ----------------
+We'll scan a window by default (fast). If "Full History (Genesis)" is checked
+the scanner will iterate from block 0 in chunks and cache progress in IndexedDB.
+This is intentionally conservative (throttled) so it works from browser.
+*/
+async function scanAddress(address) {
+  if(!ethers.isAddress(address)) throw new Error('Invalid address');
+  ui.prog.style.width = '0%';
+  // quick balance/nonce/head
+  const [bal, nonce, head] = await Promise.all([ getBalance(address), getNonce(address), getBlockNumber() ]);
+  ui.balance.textContent = `${Number(ethers.formatEther(bal)).toFixed(6)} MON`;
+  ui.nonceLine.textContent = `Tx Count (nonce): ${nonce}`;
 
-  const [bal,nonce,head]=await Promise.all([getBalance(address),getNonce(address),getBlockNumber()]);
-  ui.balance.textContent=`${Number(fmtEth(bal)).toFixed(6)} MON`;
-  ui.nonce.textContent=String(nonce);
-
-  const cacheKey=address.toLowerCase();
-  let state= await dbGet(cacheKey) || {
-    lastScannedBlock:-1, peers:{}, edges:{}, days:{},
-    inflow:0n,outflow:0n,inCount:0,outCount:0,smallTxs:0,totalNativeTxs:0,firstSeen:Infinity,lastSeen:0
+  // state structure for caching
+  const key = address.toLowerCase();
+  let state = await dbGet(key) || {
+    lastScannedBlock: -1,
+    peers: {}, // map other -> {in:bigint,out:bigint,inTx,outTx,isContract}
+    days: {},  // yyyy-mm-dd -> {in:0,out:0,count:0}
+    inflow: 0n, outflow: 0n, gasSpent: 0n, totalNativeTxs: 0, firstSeen: Infinity, lastSeen: 0
   };
 
-  const start = ui.genesis.checked ? (state.lastScannedBlock+1) : Math.max(0, head- (Number(ui.chunk.value)*10) );
-  const totalSpan = head - (ui.genesis.checked? 0 : start) + 1;
-
-  // Native transfers (block scan)
+  const headBlock = head;
+  const genesisMode = ui.genesis.checked;
   const CHUNK = Math.max(50, Number(ui.chunk.value));
-  const PAR   = Math.min(12, Math.max(1, Number(ui.par.value)));
-  for(let from=start; from<=head; from+=CHUNK){
-    const to = Math.min(head, from+CHUNK-1);
-    for(let b=from; b<=to; b+=PAR){
-      const arr=[]; for(let i=0;i<PAR && b+i<=to;i++) arr.push(b+i);
-      const blks = await Promise.all(arr.map(n=>getBlockWithTxs(n)));
+  const LOG_CHUNK = Math.max(2000, Number(ui.logchunk.value));
+
+  const startBlock = genesisMode ? (state.lastScannedBlock + 1) : Math.max(0, headBlock - CHUNK * 10);
+  const totalSpan = headBlock - (genesisMode ? 0 : startBlock) + 1;
+
+  // scan native txs block-by-block in chunks (throttled)
+  for(let from = startBlock; from <= headBlock; from += CHUNK){
+    const to = Math.min(headBlock, from + CHUNK - 1);
+    // parallelize small groups
+    const PAR = 6;
+    for(let b = from; b <= to; b += PAR){
+      const arr = []; for(let i=0;i<PAR && b+i<=to;i++) arr.push(b+i);
+      const blks = await Promise.all(arr.map(n => getBlockWithTxs(n).catch(()=>null)));
       blks.forEach(blk=>{
-        const ts = hexToNum(blk.timestamp);
-        (blk.transactions||[]).forEach(tx=>{
-          const fromAddr = (tx.from||"").toLowerCase();
-          const toAddr   = (tx.to||"").toLowerCase();
-          if(fromAddr===address.toLowerCase() || toAddr===address.toLowerCase()){
-            const isOut = fromAddr===address.toLowerCase();
-            const other = ethers.getAddress(isOut ? (tx.to||"0x0000000000000000000000000000000000000000") : tx.from);
-            const value = hexToBig(tx.value||"0x0");
-            state.days[dayKey(ts)] ??= {in:0,out:0,ev:0};
-            if(isOut){ state.outflow+=value; state.outCount++; state.days[dayKey(ts)].out += Number(fmtEth(value)); }
-            else     { state.inflow+=value;  state.inCount++;  state.days[dayKey(ts)].in  += Number(fmtEth(value)); }
-            if(Number(fmtEth(value))<0.02) state.smallTxs++;
+        if(!blk) return;
+        const ts = hexToNum(blk.timestamp || '0x0');
+        (blk.transactions || []).forEach(tx => {
+          const fromAddr = (tx.from || '').toLowerCase();
+          const toAddr = (tx.to || '').toLowerCase();
+          const targetLower = address.toLowerCase();
+          if(fromAddr === targetLower || toAddr === targetLower){
+            const isOut = fromAddr === targetLower;
+            const other = ethers.getAddress(isOut ? (tx.to || '0x0000000000000000000000000000000000000000') : tx.from);
+            const value = hexToBig(tx.value || '0x0');
+            const gasUsed = hexToBig(tx.gas || tx.gasLimit || '0x0'); // approximate; use gas from tx when block doesn't include receipt
+            // store days
+            const d = new Date(ts*1000).toISOString().slice(0,10);
+            state.days[d] ??= {in:0,out:0,count:0};
+            if(isOut){ state.outflow += value; state.days[d].out += Number(ethers.formatEther(value)); }
+            else { state.inflow += value; state.days[d].in += Number(ethers.formatEther(value)); }
+            state.days[d].count++;
+            // peers
             state.peers[other] ??= {in:0n,out:0n,inTx:0,outTx:0,isContract:false};
-            if(isOut){ state.peers[other].out+=value; state.peers[other].outTx++;
-              const k=address.toLowerCase()+"->"+other.toLowerCase(); state.edges[k] ??= {value:0,count:0,native:true}; state.edges[k].value += Number(fmtEth(value)); state.edges[k].count++;
-            } else { state.peers[other].in+=value; state.peers[other].inTx++;
-              const k=other.toLowerCase()+"->"+address.toLowerCase(); state.edges[k] ??= {value:0,count:0,native:true}; state.edges[k].value += Number(fmtEth(value)); state.edges[k].count++;
-            }
-            state.firstSeen=Math.min(state.firstSeen,ts); state.lastSeen=Math.max(state.lastSeen,ts); state.totalNativeTxs++;
+            if(isOut){ state.peers[other].out += value; state.peers[other].outTx++; }
+            else { state.peers[other].in += value; state.peers[other].inTx++; }
+            // gas accumulation (rough): use gasPrice if present
+            if(tx.gasPrice){ try{ const gp = hexToBig(tx.gasPrice); state.gasSpent += (gp * hexToBig(tx.gas || tx.gasLimit || '0x0')); }catch(_){} }
+            state.totalNativeTxs++;
+            state.firstSeen = Math.min(state.firstSeen, ts);
+            state.lastSeen = Math.max(state.lastSeen, ts);
           }
         });
       });
       state.lastScannedBlock = Math.max(state.lastScannedBlock, arr[arr.length-1] ?? state.lastScannedBlock);
-      const done = state.lastScannedBlock - (ui.genesis.checked ? 0 : start) + 1;
-      ui.prog.style.width = Math.min(70, (done/Math.max(1,totalSpan))*70).toFixed(1)+'%';
-      await dbPut(cacheKey,state);
+      // progress update
+      const done = state.lastScannedBlock - (genesisMode ? 0 : startBlock) + 1;
+      ui.prog.style.width = Math.min(65, (done / Math.max(1, totalSpan)) * 65).toFixed(1) + '%';
+      // persist
+      await dbPut(key, state);
+      await new Promise(r=>setTimeout(r, 8));
     }
   }
 
-  // Token/NFT logs
-  const TRANSFER_TOPIC="0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
-  const LOG_CHUNK=Math.max(2000, Number(ui.logChunk.value));
-  for(let from=0; from<=head; from+=LOG_CHUNK){
-    const to=Math.min(head, from+LOG_CHUNK-1);
+  // token/NFT logs (transfer topics)
+  const TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
+  for(let from=0; from<=headBlock; from += LOG_CHUNK){
+    const to = Math.min(headBlock, from + LOG_CHUNK - 1);
     try{
-      const logs = await getLogs(from,to,[TRANSFER_TOPIC]);
+      const logs = await getLogs(from, to, [TRANSFER_TOPIC]);
       for(const L of logs){
-        const f = "0x"+L.topics[1].slice(26);
-        const t = "0x"+L.topics[2].slice(26);
-        if(f.toLowerCase()!==address.toLowerCase() && t.toLowerCase()!==address.toLowerCase()) continue;
-        const out = f.toLowerCase()===address.toLowerCase();
-        const other = ethers.getAddress(out? t : f);
+        const f = "0x" + L.topics[1].slice(26);
+        const t = "0x" + L.topics[2].slice(26);
+        if(f.toLowerCase() !== address.toLowerCase() && t.toLowerCase() !== address.toLowerCase()) continue;
+        const out = f.toLowerCase() === address.toLowerCase();
+        const other = ethers.getAddress(out ? t : f);
+        // get block timestamp quickly
         const blk = await getBlock(hexToNum(L.blockNumber));
-        const ts  = hexToNum(blk.timestamp);
-        state.days[dayKey(ts)] ??= {in:0,out:0,ev:0}; state.days[dayKey(ts)].ev += 1;
-        const key = out ? address.toLowerCase()+"->"+other.toLowerCase() : other.toLowerCase()+"->"+address.toLowerCase();
-        state.edges[key] ??= {value:0,count:0,native:false}; state.edges[key].count++;
-        state.firstSeen=Math.min(state.firstSeen,ts); state.lastSeen=Math.max(state.lastSeen,ts);
+        const ts = hexToNum(blk.timestamp || '0x0');
+        const d = new Date(ts*1000).toISOString().slice(0,10);
+        state.days[d] ??= {in:0,out:0,count:0};
+        state.days[d].count++;
+        // aggregate (we don't sum amounts for tokens here reliably)
+        state.peers[other] ??= {in:0n,out:0n,inTx:0,outTx:0,isContract:false};
       }
-    }catch(e){ console.warn("logs error", e.message); }
-    const pct = 70 + Math.min(25, ((to/head)*25));
-    ui.prog.style.width = pct.toFixed(1)+'%';
-    await dbPut(cacheKey,state);
+    }catch(e){
+      console.warn('logs chunk error', e.message);
+    }
+    ui.prog.style.width = (70 + Math.min(25, (to/headBlock)*25)).toFixed(1) + '%';
+    await dbPut(key, state);
+    await new Promise(r=>setTimeout(r, 20));
   }
 
-  // contract labelling
-  await Promise.all(Object.keys(state.peers).map(async p=>{ try{ const code=await getCode(p); state.peers[p].isContract = (code && code!=='0x'); }catch{} }));
-  ui.prog.style.width='98%';
+  // label peers as contract or not
+  const peerKeys = Object.keys(state.peers);
+  for(const p of peerKeys){
+    try{
+      const code = await getCode(p);
+      state.peers[p].isContract = (code && code !== '0x');
+    }catch(_){}
+  }
 
-  // summaries
-  ui.peers.textContent = String(Object.keys(state.peers).length);
-  ui.flow.textContent  = `${Number(fmtEth(state.inflow)).toFixed(5)} / ${Number(fmtEth(state.outflow)).toFixed(5)} MON`;
-  ui.seen.textContent  = `${new Date((state.firstSeen===Infinity?Date.now()/1000:state.firstSeen)*1000).toLocaleString()} — ${new Date(state.lastSeen*1000).toLocaleString()}`;
-
-  const summary={
-    address,balance:fmtEth(await getBalance(address)),nonce,
-    peers:state.peers,inflow:Number(fmtEth(state.inflow)),outflow:Number(fmtEth(state.outflow)),
-    firstSeen:state.firstSeen===Infinity?(Date.now()/1000):state.firstSeen,lastSeen:state.lastSeen,
-    totalNativeTxs:state.totalNativeTxs,inCount:state.inCount,outCount:state.outCount,smallTxs:state.smallTxs,
-    bursts:0,twoWayPairs:(()=>{const keys=Object.keys(state.edges),set=new Set();let c=0;for(const k of keys){const [a,b]=k.split("->"); if(set.has(b+"->"+a)) c++; set.add(k);} return c;})()
-  };
-  const sc=sybilScore(summary); ui.risk.textContent=`${sc.label} (${sc.score})`; ui.risk.className='value risk '+sc.cls;
-
+  // finalize numbers and UI
+  const totalIn = Number(ethers.formatEther(state.inflow));
+  const totalOut = Number(ethers.formatEther(state.outflow));
+  const gasEth = Number(ethers.formatEther(state.gasSpent || 0n));
+  ui.volume.textContent = `${totalIn.toFixed(5)} / ${totalOut.toFixed(5)} MON`;
+  ui.gas.textContent = `${gasEth.toFixed(6)} MON`;
+  ui.activeDays.textContent = Object.keys(state.days).length;
+  // compute streak
+  const days = Object.keys(state.days).sort();
+  ui.seen.textContent = `${new Date((state.firstSeen===Infinity?Date.now()/1000:state.firstSeen)*1000).toLocaleString()} — ${new Date(state.lastSeen*1000).toLocaleString()}`;
+  ui.prog.style.width = '98%';
+  // streak calculation (consecutive calendar days)
+  let longest = 0, current = 0;
+  if(days.length){
+    const dayNumbers = days.map(d => new Date(d + 'T00:00:00Z').valueOf());
+    let prev = null;
+    for(const dt of dayNumbers){
+      if(prev === null || dt - prev > 86400000){
+        current = 1;
+      } else {
+        current++;
+      }
+      longest = Math.max(longest, current);
+      prev = dt;
+    }
+  }
+  ui.streak.textContent = longest;
+  // timeline chart
   renderTimeline(state.days);
+  // small counterparty graph
   renderGraph(address, state);
+  ui.prog.style.width = '100%';
 
-  ui.prog.style.width='100%';
-  lastReport={summary, days:state.days, edges:state.edges, peers:state.peers, generatedAt:new Date().toISOString(), chainId:10143, rpc:RPC_ORIGIN, proxy:"corsproxy.io"};
+  // final persist and set lastReport
+  await dbPut(key, state);
+  window.lastReport = { address, balance: Number(ethers.formatEther(bal)), nonce, stats: state, generatedAt: new Date().toISOString(), rpc:RPC_ORIGIN };
 }
 
-/* ====== Timeline ====== */
-function renderTimeline(days){
-  const labels=Object.keys(days).sort();
-  const inflows=labels.map(k=>days[k].in||0), outflows=labels.map(k=>days[k].out||0), ev=labels.map(k=>days[k].ev||0);
+/* ---------------- Timeline (Chart.js) ---------------- */
+function renderTimeline(daysObj){
+  const labels = Object.keys(daysObj).sort();
+  const txCounts = labels.map(k => daysObj[k].count || 0);
+  const inflows = labels.map(k => daysObj[k].in || 0);
   if(timelineChart) timelineChart.destroy();
-  timelineChart=new Chart(document.getElementById('timeline'),{type:'bar',data:{labels,datasets:[
-    {label:'Inflow (MON)',data:inflows},{label:'Outflow (MON)',data:outflows},{label:'Token/NFT Events',data:ev}
-  ]},options:{responsive:true,scales:{x:{grid:{display:false},ticks:{color:'#9fb0ff'}},y:{grid:{color:'#1b2442'},ticks:{color:'#9fb0ff'}}},plugins:{legend:{labels:{color:'#cfe3ff'}}}}});
+  const ctx = document.getElementById('timeline').getContext('2d');
+  timelineChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Tx Count', data: txCounts, stack: 'a' },
+        { label: 'Native Volume (MON)', data: inflows, stack: 'b', type: 'line', yAxisID: 'vol' }
+      ]
+    },
+    options: {
+      responsive: true,
+      scales: {
+        x: { ticks: { color: '#bcd6ff' } },
+        y: { beginAtZero: true, ticks: { color: '#bcd6ff' } },
+        vol: { position: 'right', beginAtZero: true, ticks: { color: '#bcd6ff' } }
+      },
+      plugins: { legend: { labels: { color: '#dfefff' } } }
+    }
+  });
 }
 
-/* ====== Graph (aggregated edges) ====== */
-function renderGraph(center,state){
-  const el=document.getElementById('graph'); el.innerHTML='';
-  const w=el.clientWidth,h=el.clientHeight;
-  const svg=d3.select(el).append('svg').attr('width',w).attr('height',h);
-  const nodesMap=new Map(); nodesMap.set(center.toLowerCase(),{id:center,type:'self'});
-  Object.entries(state.peers).forEach(([a,info])=> nodesMap.set(a.toLowerCase(),{id:a,type:info.isContract?'contract':'peer'}));
-  const links=Object.entries(state.edges).map(([k,e])=>{const [s,t]=k.split('->');return{source:s,target:t,value:e.value,native:e.native}});
-  const nodes=[...nodesMap.values()];
-  const g=svg.append('g'); svg.call(d3.zoom().scaleExtent([.3,4]).on('zoom',e=>g.attr('transform',e.transform)));
-  const sim=d3.forceSimulation(nodes).force('link',d3.forceLink(links).id(d=>d.id).distance(100).strength(.6)).force('charge',d3.forceManyBody().strength(-220)).force('center',d3.forceCenter(w/2,h/2)).force('radial',d3.forceRadial(d=>d.type==='self'?0:220,w/2,h/2).strength(.06));
-  const edge=g.append('g').selectAll('line').data(links).enter().append('line').attr('stroke',d=> d.source===center.toLowerCase()? '#ff6b6b' : '#23d1a2').attr('stroke-opacity',.45).attr('stroke-width',d=>1+Math.min(6,Math.log((d.value||1)+2)));
-  const node=g.append('g').selectAll('circle').data(nodes).enter().append('circle').attr('r',d=>d.type==='self'?10:6).attr('fill',d=>d.type==='self'?'#93c5fd':d.type==='contract'?'#f59e0b':'#a3b8ff').attr('stroke','#2c365e').attr('stroke-width',1).call(d3.drag().on('start',e=>{if(!e.active)sim.alphaTarget(.2).restart(); e.subject.fx=e.subject.x; e.subject.fy=e.subject.y;}).on('drag',e=>{e.subject.fx=e.x; e.subject.fy=e.y;}).on('end',e=>{if(!e.active)sim.alphaTarget(0); e.subject.fx=null; e.subject.fy=null;}));
-  sim.on('tick',()=>{edge.attr('x1',d=>d.source.x).attr('y1',d=>d.source.y).attr('x2',d=>d.target.x).attr('y2',d=>d.target.y); node.attr('cx',d=>d.x).attr('cy',d=>d.y);});
+/* ---------------- Graph (D3) ---------------- */
+function renderGraph(centerAddr, state) {
+  const el = document.getElementById('graph'); el.innerHTML = '';
+  const width = el.clientWidth || 1000, height = 520;
+  const svg = d3.select(el).append('svg').attr('width', width).attr('height', height);
+  const nodesMap = new Map();
+  nodesMap.set(centerAddr.toLowerCase(), { id: centerAddr, type: 'self' });
+  Object.entries(state.peers).slice(0, 120).forEach(([addr, info]) => {
+    nodesMap.set(addr.toLowerCase(), { id: addr, type: info.isContract ? 'contract' : 'peer' });
+  });
+  const nodes = Array.from(nodesMap.values());
+  // create simple aggregated links from peers to center (if either direction)
+  const links = [];
+  for(const [k, v] of Object.entries(state.peers)){
+    const id = k.toLowerCase();
+    links.push({ source: id, target: centerAddr.toLowerCase(), value: Number(v.in || 0) + Number(v.out || 0) });
+  }
+  const g = svg.append('g');
+  svg.call(d3.zoom().scaleExtent([0.3,4]).on('zoom', (e)=> g.attr('transform', e.transform)));
+  const link = g.append('g').selectAll('line').data(links).enter().append('line')
+    .attr('stroke', d => d.source === centerAddr.toLowerCase() ? '#ff6b6b' : '#23d1a2')
+    .attr('stroke-opacity', .55).attr('stroke-width', d => Math.min(6, 1 + Math.log((d.value||1)+2)));
+  const node = g.append('g').selectAll('circle').data(nodes).enter().append('circle')
+    .attr('r', d => d.type==='self'?10:6)
+    .attr('fill', d => d.type==='self' ? '#93c5fd' : (d.type==='contract' ? '#f59e0b' : '#a3b8ff'))
+    .attr('stroke', '#18263f').attr('stroke-width', 1.2)
+    .call(d3.drag().on('start', (event, d) => { if(!event.active) sim.alphaTarget(0.2).restart(); d.fx = d.x; d.fy = d.y; })
+      .on('drag', (event,d)=> { d.fx = event.x; d.fy = event.y; })
+      .on('end', (event,d)=> { if(!event.active) sim.alphaTarget(0); d.fx = null; d.fy = null; }));
+  const tooltip = d3.select('body').append('div').style('position','fixed').style('pointer-events','none')
+    .style('background','#081026cc').style('border','1px solid #21304f').style('padding','8px').style('border-radius','8px').style('color','#dfefff').style('display','none');
+  node.on('mouseover', (e,d) => {
+    const p = state.peers[d.id] || {};
+    tooltip.style('display','block').html(`<div style="font-family:ui-monospace">${short(d.id)}</div><div style="font-size:12px;color:#bcd6ff">${d.type}</div>`);
+  }).on('mousemove', (e)=> tooltip.style('left',(e.clientX+12)+'px').style('top',(e.clientY+12)+'px'))
+    .on('mouseout', ()=> tooltip.style('display','none'));
+  const sim = d3.forceSimulation(nodes)
+    .force('link', d3.forceLink(links).id(d=>d.id).distance(100).strength(.8))
+    .force('charge', d3.forceManyBody().strength(-220))
+    .force('center', d3.forceCenter(width/2, height/2))
+    .alpha(0.9).alphaDecay(0.03)
+    .on('tick', ()=> {
+      link.attr('x1',d=> (d.source.x)).attr('y1',d=> (d.source.y)).attr('x2',d=> (d.target.x)).attr('y2',d=> (d.target.y));
+      node.attr('cx', d=> d.x).attr('cy', d=> d.y);
+    });
+  function short(a){ return a.slice(0,6) + '…' + a.slice(-4); }
 }
 
-/* ====== Export ====== */
-exportBtn.onclick=()=>{
-  if(!lastReport){ alert('Run a scan first.'); return; }
-  const blob=new Blob([JSON.stringify(lastReport,null,2)],{type:'application/json'});
-  const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=`sybil-report-${lastReport.summary.address}.json`; a.click(); URL.revokeObjectURL(url);
-};
+/* ---------------- Export handler ---------------- */
+document.getElementById('exportBtn').addEventListener('click', () => {
+  if(!window.lastReport){ alert('Run a scan first.'); return; }
+  const blob = new Blob([JSON.stringify(window.lastReport, null, 2)], {type:'application/json'});
+  const u = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = u; a.download = `monad-address-${window.lastReport.address}.json`; a.click();
+  URL.revokeObjectURL(u);
+});
 
-/* ====== Run ====== */
-scanBtn.onclick=async()=>{ try{ await scan(addr.value.trim()); }catch(e){ console.error(e); alert('Scan failed: '+(e.message||e)); document.getElementById('prog').style.width='0%'; } };
+/* ---------------- Button wiring ---------------- */
+document.getElementById('scanBtn').addEventListener('click', async () => {
+  const addr = ui.addr.value.trim();
+  try{
+    document.getElementById('prog').style.width = '2%';
+    await scanAddress(addr);
+  }catch(err){
+    console.error(err);
+    alert('Scan failed: ' + (err.message || err));
+    document.getElementById('prog').style.width = '0%';
+  }
+});
+
+/* small util conversions */
+function hexToNum(h){ try{ return parseInt(h,16); }catch(e){return 0;} }
+function hexToBig(h){ try{ return BigInt(h); }catch(e){return 0n;} }
 </script>
 </body>
 </html>
