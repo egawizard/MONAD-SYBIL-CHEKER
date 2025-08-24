@@ -3,18 +3,18 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Monad Address Checker — Testnet</title>
-<meta name="description" content="Address stats, volume, gas, day-streak and charts for MONAD Testnet (Chain ID 10143)."/>
-<!-- Ethers (v6 UMD), D3, Chart.js -->
+<title>Monad Checker Intelligence — Testnet</title>
+<meta name="description" content="Monad address intelligence — balance, txs, volume, gas, day-streak and D3 network graph (Arkham-like). Chain ID 10143."/>
+<!-- libs -->
 <script src="https://cdn.jsdelivr.net/npm/ethers@6.7.1/dist/ethers.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
 <style>
 :root{
-  --bg:#070812; --panel:#0b1220cc; --muted:#9fb0ff; --text:#eaf0ff;
+  --bg:#070812; --muted:#9fb0ff; --text:#eaf0ff;
   --accent1:#6ee7ff; --accent2:#a78bfa; --ok:#10d7a3; --danger:#ff6b6b;
-  --card-border:#10162b;
+  --panel:#0b1220cc; --card-border:#10162b;
 }
 *{box-sizing:border-box}
 html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial}
@@ -43,12 +43,14 @@ canvas#bg{position:fixed;inset:0;z-index:-2}
 .legend{display:flex;gap:8px;align-items:center;margin-top:8px}
 .legend .dot{width:10px;height:10px;border-radius:50%;display:inline-block}
 .dot.in{background:var(--ok)}.dot.out{background:var(--danger)}.dot.self{background:#93c5fd}
-.footer{opacity:.7;margin-top:18px;font-size:13px}
+.footer{opacity:.8;margin-top:18px;font-size:13px}
 .code{font-family:ui-monospace,monospace;font-size:12px;color:#cfe6ff}
-#graph{width:100%;height:520px;border-radius:12px;background:linear-gradient(180deg, rgba(255,255,255,.01), rgba(255,255,255,.005));border:1px solid #12203a}
+#graph{width:100%;height:520px;border-radius:12px;background:linear-gradient(180deg, rgba(255,255,255,.01), rgba(255,255,255,.005));border:1px solid #12203a;overflow:hidden}
 .note{font-size:12px;color:var(--muted);margin-top:8px}
 .warning{color:#ffd166;font-weight:700}
 @media(max-width:880px){.grid-3{grid-template-columns:1fr}}
+.mono{font-family:ui-monospace,monospace}
+.topbar-actions{display:flex;gap:8px;align-items:center}
 </style>
 </head>
 <body>
@@ -59,27 +61,28 @@ canvas#bg{position:fixed;inset:0;z-index:-2}
     <div class="brand">
       <div class="logo">M</div>
       <div>
-        <div class="h1">Monad Address Checker — Testnet</div>
-        <div class="small">Chain ID: <span class="code">10143</span> · RPC: <span class="code">https://testnet-rpc.monad.xyz</span></div>
+        <div class="h1">Monad Checker Intelligence</div>
+        <div class="small">Chain ID: <span class="code">10143</span> · RPC (manual): <span class="code">https://rpc.ankr.com/monad_testnet</span></div>
       </div>
     </div>
-    <div class="controls">
+    <div class="controls topbar-actions">
+      <button id="connectBtn" class="btn ghost">Connect Wallet</button>
       <div class="small">Credit: <a href="https://x.com/ega_2ez4crypto" target="_blank" style="color:var(--accent1)">@ega_2ez4crypto</a></div>
     </div>
   </div>
 
   <div class="card">
     <div class="toolbar">
-      <input id="addr" class="input" placeholder="Paste MONAD testnet address (0x...)" />
+      <input id="addr" class="input mono" placeholder="Paste MONAD testnet address (0x...) or leave blank to use connected wallet" />
       <button id="scanBtn" class="btn primary">Scan</button>
       <button id="exportBtn" class="btn ghost">Export JSON</button>
     </div>
 
     <div style="display:flex;gap:12px;align-items:center;margin-top:10px;flex-wrap:wrap">
       <label class="row small"><input type="checkbox" id="genesis" /> Full History (Genesis) — <span class="warning">&nbsp;heavy</span></label>
-      <label class="row small">Blocks chunk <input id="chunk" type="number" value="400" style="width:90px;margin-left:6px" /></label>
+      <label class="row small">Blocks chunk <input id="chunk" type="number" value="300" style="width:90px;margin-left:6px" /></label>
       <label class="row small">Logs chunk <input id="logchunk" type="number" value="8000" style="width:90px;margin-left:6px" /></label>
-      <div style="margin-left:auto" class="small">Using CORS proxy: <span class="code">corsproxy.io</span> (you can change in code)</div>
+      <div style="margin-left:auto" class="small">Mode: <span id="modeLabel">Manual RPC (Ankr)</span></div>
     </div>
 
     <div class="grid-3">
@@ -91,12 +94,12 @@ canvas#bg{position:fixed;inset:0;z-index:-2}
       <div class="stat">
         <div class="label">Total Volume (In / Out)</div>
         <div id="volume" class="value mono">— / — MON</div>
-        <div class="small">Total native transfers & sum</div>
+        <div class="small">Sum of native transfers (approx)</div>
       </div>
       <div class="stat">
         <div class="label">Gas Spent (approx)</div>
         <div id="gas" class="value mono">— MON</div>
-        <div class="small">Gas*price across scanned tx (approx)</div>
+        <div class="small">Gas * price across scanned tx (approx)</div>
       </div>
     </div>
 
@@ -109,7 +112,7 @@ canvas#bg{position:fixed;inset:0;z-index:-2}
       <div class="stat">
         <div class="label">Current Day Streak</div>
         <div id="streak" class="value mono">—</div>
-        <div class="small">Longest consecutive active-day streak</div>
+        <div class="small">Longest consecutive day streak</div>
       </div>
       <div class="stat">
         <div class="label">First Seen / Last Seen</div>
@@ -127,7 +130,7 @@ canvas#bg{position:fixed;inset:0;z-index:-2}
   <div class="panel-wide card" style="margin-top:18px">
     <div style="display:flex;align-items:center;justify-content:space-between">
       <div style="font-weight:700">Activity Timeline</div>
-      <div class="small">Daily txs & volume (native)</div>
+      <div class="small">Daily txs & native volume</div>
     </div>
     <canvas id="timeline" height="220" style="margin-top:12px"></canvas>
   </div>
@@ -146,7 +149,7 @@ canvas#bg{position:fixed;inset:0;z-index:-2}
   </div>
 
   <div class="footer">
-    Built for MONAD Testnet · Chain ID 10143 · RPC: <span class="code">https://testnet-rpc.monad.xyz</span>
+    Monad Checker Intelligence · Chain ID 10143 · Credit: <a href="https://x.com/ega_2ez4crypto" target="_blank">@ega_2ez4crypto</a>
   </div>
 </div>
 
@@ -156,17 +159,14 @@ canvas#bg{position:fixed;inset:0;z-index:-2}
   const c = document.getElementById('bg'), ctx = c.getContext('2d');
   let w = innerWidth, h = innerHeight; c.width = w; c.height = h;
   addEventListener('resize', () => { w = innerWidth; h = innerHeight; c.width = w; c.height = h;});
-  const orbs = Array.from({length:90}, () => ({x:Math.random()*w, y:Math.random()*h, vx:(Math.random()-0.5)*0.3, vy:(Math.random()-0.5)*0.3, r: Math.random()*1.8+0.6}));
+  const orbs = Array.from({length:110}, () => ({x:Math.random()*w, y:Math.random()*h, vx:(Math.random()-0.5)*0.35, vy:(Math.random()-0.5)*0.35, r: Math.random()*1.8+0.6}));
   function frame() {
     ctx.clearRect(0,0,w,h);
-    // subtle radial glows
     const cx = w*0.6, cy = h*0.4;
-    const g = ctx.createRadialGradient(cx,cy,0,cx,cy,700);
-    g.addColorStop(0, 'rgba(23,28,58,.35)'); g.addColorStop(1, 'transparent');
+    const g = ctx.createRadialGradient(cx,cy,0,cx,cy,700); g.addColorStop(0, 'rgba(23,28,58,.35)'); g.addColorStop(1, 'transparent');
     ctx.fillStyle = g; ctx.fillRect(0,0,w,h);
     orbs.forEach(o=>{
-      o.x += o.vx; o.y += o.vy;
-      if(o.x<0||o.x>w) o.vx *= -1; if(o.y<0||o.y>h) o.vy *= -1;
+      o.x += o.vx; o.y += o.vy; if(o.x<0||o.x>w) o.vx *= -1; if(o.y<0||o.y>h) o.vy *= -1;
       ctx.beginPath(); ctx.fillStyle = 'rgba(160,190,255,0.45)'; ctx.arc(o.x,o.y,o.r,0,Math.PI*2); ctx.fill();
     });
     requestAnimationFrame(frame);
@@ -174,51 +174,19 @@ canvas#bg{position:fixed;inset:0;z-index:-2}
   frame();
 })();
 
-/* ---------------- RPC CONFIG ----------------
-We use the provided RPC via a CORS proxy so static hosting works.
-Change PROXY_URL to your own relay / remove proxy if RPC supports CORS.
-*/
-const RPC_ORIGIN = "https://testnet-rpc.monad.xyz";
-const PROXY_URL = "https://corsproxy.io/?" + encodeURIComponent(RPC_ORIGIN);
-let rpcId = 1;
-async function rpc(method, params=[]) {
-  const res = await fetch(PROXY_URL, {
-    method: "POST",
-    headers: {"content-type":"application/json"},
-    body: JSON.stringify({jsonrpc:"2.0", id: rpcId++, method, params})
-  });
-  if(!res.ok) throw new Error('RPC HTTP ' + res.status);
-  const j = await res.json();
-  if(j.error) throw new Error(j.error.message || 'RPC error');
-  return j.result;
-}
-
-/* ---------------- small helpers ---------------- */
-const hexToNum = h => parseInt(h,16);
-const hexToBig = h => (h ? BigInt(h) : 0n);
-const toHex = n => '0x' + n.toString(16);
-const fmt = v => (typeof v === 'bigint') ? Number(ethers.formatEther(v)) : (Number(v) || 0);
-
-/* quick wrappers */
-async function getBlockNumber(){ return hexToNum(await rpc('eth_blockNumber')); }
-async function getBalance(addr){ return hexToBig(await rpc('eth_getBalance',[addr,'latest'])); }
-async function getNonce(addr){ return hexToNum(await rpc('eth_getTransactionCount',[addr,'latest'])); }
-async function getCode(addr){ return await rpc('eth_getCode',[addr,'latest']); }
-async function getBlock(num){ return await rpc('eth_getBlockByNumber',[toHex(num), false]); }
-async function getBlockWithTxs(num){ return await rpc('eth_getBlockByNumber',[toHex(num), true]); }
-async function getLogs(from,to,topics){ return await rpc('eth_getLogs', [{fromBlock: toHex(from), toBlock: toHex(to), topics}]); }
-
-/* ---------------- IndexedDB cache (minimal) ---------------- */
-const DB_NAME='monad-stats-db', STORE='addr';
-function openDB(){ return new Promise((res,rej)=>{ const r = indexedDB.open(DB_NAME,1); r.onupgradeneeded = ()=> r.result.createObjectStore(STORE,{keyPath:'key'}); r.onerror=()=> rej(r.error); r.onsuccess=()=> res(r.result); }); }
-async function dbGet(key){ const db = await openDB(); return new Promise((res,rej)=>{ const tx = db.transaction(STORE).objectStore(STORE).get(key); tx.onsuccess = ()=> res(tx.result?.value || null); tx.onerror = ()=> rej(tx.error); }); }
-async function dbPut(key,value){ const db = await openDB(); return new Promise((res,rej)=>{ const tx = db.transaction(STORE,'readwrite').objectStore(STORE).put({key,value}); tx.oncomplete = ()=> res(); tx.onerror = ()=> rej(tx.error); }); }
+/* ---------------- Config ---------------- */
+const CHAIN_ID = 10143;
+const ANKR_RPC = "https://rpc.ankr.com/monad_testnet"; // recommended for manual mode
+let manualProvider = new ethers.JsonRpcProvider(ANKR_RPC, {chainId: CHAIN_ID, name: "monad-testnet"});
+let walletProvider = null; // ethers provider from injected wallet (if connected)
+let useProvider = manualProvider; // provider used for manual scans by default
 
 /* ---------------- UI refs ---------------- */
 const ui = {
   addr: document.getElementById('addr'),
   scan: document.getElementById('scanBtn'),
   export: document.getElementById('exportBtn'),
+  connect: document.getElementById('connectBtn'),
   genesis: document.getElementById('genesis'),
   chunk: document.getElementById('chunk'),
   logchunk: document.getElementById('logchunk'),
@@ -230,164 +198,216 @@ const ui = {
   activeDays: document.getElementById('activeDays'),
   streak: document.getElementById('streak'),
   seen: document.getElementById('seen'),
-  peersCount: document.getElementById('peers'),
 };
 
 /* charts */
 let timelineChart = null;
 
-/* ---------------- SyT: Simple stats scanner ----------------
-We'll scan a window by default (fast). If "Full History (Genesis)" is checked
-the scanner will iterate from block 0 in chunks and cache progress in IndexedDB.
-This is intentionally conservative (throttled) so it works from browser.
+/* small helpers */
+const hexToNum = h => parseInt(h,16);
+const hexToBig = h => (h ? BigInt(h) : 0n);
+const toHex = n => '0x' + n.toString(16);
+const sleep = ms => new Promise(r=>setTimeout(r,ms));
+
+/* ---------------- Wallet connect (MetaMask) ---------------- */
+async function connectWallet(){
+  if(!window.ethereum) {
+    alert('No wallet detected. Install MetaMask or another EVM wallet.');
+    return;
+  }
+  try{
+    await window.ethereum.request({ method: 'eth_requestAccounts' });
+    walletProvider = new ethers.BrowserProvider(window.ethereum, "any"); // ethers v6
+    // optional: ensure chain is correct
+    try{
+      const network = await walletProvider.getNetwork();
+      if(Number(network.chainId) !== CHAIN_ID){
+        // attempt to switch chain (MetaMask)
+        try{
+          await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: ethers.toBeHex(CHAIN_ID) }] });
+        }catch(swErr){
+          console.warn('Switch chain failed', swErr.message);
+        }
+      }
+    }catch(e){}
+    useProvider = walletProvider;
+    document.getElementById('modeLabel').textContent = 'Connected Wallet (provider)';
+    ui.connect.textContent = 'Wallet Connected';
+    ui.connect.classList.remove('btn','ghost'); ui.connect.classList.add('btn','primary');
+    // prefill address in input
+    const accounts = await walletProvider.listAccounts();
+    if(accounts && accounts.length) ui.addr.value = accounts[0].address || accounts[0];
+  }catch(err){
+    console.error(err);
+    alert('Wallet connect failed: ' + (err.message||err));
+  }
+}
+ui.connect.addEventListener('click', connectWallet);
+
+/* ---------------- RPC helpers (manual provider uses ANKR) ---------------- */
+async function rpc_getBlockNumber(){ return Number(await useProvider.getBlockNumber()); }
+async function rpc_getBalance(addr){ return await useProvider.getBalance(addr); }
+async function rpc_getTransactionCount(addr){ return await useProvider.getTransactionCount(addr); }
+async function rpc_getBlockWithTxs(num){ return await useProvider.getBlockWithTransactions(num); }
+async function rpc_getBlock(num){ return await useProvider.getBlock(num); }
+async function rpc_getCode(addr){ return await useProvider.getCode(addr); }
+async function rpc_getLogs(from, to, topics){ // use provider.send fallback for filtering logs if available
+  // ethers provider has getLogs
+  try{
+    return await useProvider.getLogs({ fromBlock: from, toBlock: to, topics });
+  }catch(e){
+    console.warn('getLogs failed:', e.message);
+    return [];
+  }
+}
+
+/* ---------------- Core scanning logic ----------------
+- For manual (paste) mode we use the chosen provider (Ankr recommended).
+- For wallet connected mode we use walletProvider (which avoids CORS).
+- We scan blocks chunked and aggregate peers and daily stats.
 */
-async function scanAddress(address) {
-  if(!ethers.isAddress(address)) throw new Error('Invalid address');
+async function scanAddressFlow(inputAddress){
+  const addr = (inputAddress || ui.addr.value || '').trim();
+  if(!ethers.isAddress(addr)) { alert('Invalid address. Paste a valid 0x... address or connect wallet.'); return; }
   ui.prog.style.width = '0%';
-  // quick balance/nonce/head
-  const [bal, nonce, head] = await Promise.all([ getBalance(address), getNonce(address), getBlockNumber() ]);
-  ui.balance.textContent = `${Number(ethers.formatEther(bal)).toFixed(6)} MON`;
+
+  // initialize base stats
+  const [balance, nonce, headBlock] = await Promise.all([
+    rpc_getBalance(addr),
+    rpc_getTransactionCount(addr),
+    rpc_getBlockNumber()
+  ]);
+  ui.balance.textContent = `${Number(ethers.formatEther(balance)).toFixed(6)} MON`;
   ui.nonceLine.textContent = `Tx Count (nonce): ${nonce}`;
 
-  // state structure for caching
-  const key = address.toLowerCase();
-  let state = await dbGet(key) || {
-    lastScannedBlock: -1,
-    peers: {}, // map other -> {in:bigint,out:bigint,inTx,outTx,isContract}
-    days: {},  // yyyy-mm-dd -> {in:0,out:0,count:0}
+  // caching state per address (IndexedDB idea skipped for brevity; could be added)
+  const state = {
+    peers: {}, // other => {in:bigint,out:bigint,inTx,outTx,isContract}
+    days: {}, // yyyy-mm-dd => {in: 0, out:0, count:0}
     inflow: 0n, outflow: 0n, gasSpent: 0n, totalNativeTxs: 0, firstSeen: Infinity, lastSeen: 0
   };
 
-  const headBlock = head;
   const genesisMode = ui.genesis.checked;
-  const CHUNK = Math.max(50, Number(ui.chunk.value));
-  const LOG_CHUNK = Math.max(2000, Number(ui.logchunk.value));
+  const CHUNK = Math.max(50, Number(ui.chunk.value) || 300);
+  const LOG_CHUNK = Math.max(2000, Number(ui.logchunk.value) || 8000);
 
-  const startBlock = genesisMode ? (state.lastScannedBlock + 1) : Math.max(0, headBlock - CHUNK * 10);
-  const totalSpan = headBlock - (genesisMode ? 0 : startBlock) + 1;
+  const startBlock = genesisMode ? 0 : Math.max(0, headBlock - CHUNK * 12);
+  const endBlock = headBlock;
 
-  // scan native txs block-by-block in chunks (throttled)
-  for(let from = startBlock; from <= headBlock; from += CHUNK){
-    const to = Math.min(headBlock, from + CHUNK - 1);
-    // parallelize small groups
+  // block scan (native txs). Throttle and chunk.
+  const totalBlocks = endBlock - startBlock + 1;
+  let scannedBlocks = 0;
+  for(let from = startBlock; from <= endBlock; from += CHUNK){
+    const to = Math.min(endBlock, from + CHUNK - 1);
+    // inside chunk do small parallel groups to avoid overload
     const PAR = 6;
     for(let b = from; b <= to; b += PAR){
       const arr = []; for(let i=0;i<PAR && b+i<=to;i++) arr.push(b+i);
-      const blks = await Promise.all(arr.map(n => getBlockWithTxs(n).catch(()=>null)));
-      blks.forEach(blk=>{
-        if(!blk) return;
-        const ts = hexToNum(blk.timestamp || '0x0');
-        (blk.transactions || []).forEach(tx => {
-          const fromAddr = (tx.from || '').toLowerCase();
-          const toAddr = (tx.to || '').toLowerCase();
-          const targetLower = address.toLowerCase();
+      const blks = await Promise.all(arr.map(n => rpc_getBlockWithTxs(n).catch(()=>null)));
+      for(const blk of blks){
+        if(!blk) { scannedBlocks++; continue; }
+        const ts = Number(blk.timestamp || 0);
+        const dayKey = new Date(ts*1000).toISOString().slice(0,10);
+        for(const tx of (blk.transactions || [])){
+          const fromAddr = (tx.from||'').toLowerCase();
+          const toAddr = (tx.to||'').toLowerCase();
+          const targetLower = addr.toLowerCase();
           if(fromAddr === targetLower || toAddr === targetLower){
             const isOut = fromAddr === targetLower;
-            const other = ethers.getAddress(isOut ? (tx.to || '0x0000000000000000000000000000000000000000') : tx.from);
+            const other = ethers.getAddress(isOut ? (tx.to||'0x0000000000000000000000000000000000000000') : tx.from);
             const value = hexToBig(tx.value || '0x0');
-            const gasUsed = hexToBig(tx.gas || tx.gasLimit || '0x0'); // approximate; use gas from tx when block doesn't include receipt
-            // store days
-            const d = new Date(ts*1000).toISOString().slice(0,10);
-            state.days[d] ??= {in:0,out:0,count:0};
-            if(isOut){ state.outflow += value; state.days[d].out += Number(ethers.formatEther(value)); }
-            else { state.inflow += value; state.days[d].in += Number(ethers.formatEther(value)); }
-            state.days[d].count++;
+            // record daily
+            state.days[dayKey] ??= {in:0,out:0,count:0};
+            if(isOut){ state.outflow += value; state.days[dayKey].out += Number(ethers.formatEther(value)); }
+            else { state.inflow += value; state.days[dayKey].in += Number(ethers.formatEther(value)); }
+            state.days[dayKey].count++;
             // peers
             state.peers[other] ??= {in:0n,out:0n,inTx:0,outTx:0,isContract:false};
             if(isOut){ state.peers[other].out += value; state.peers[other].outTx++; }
             else { state.peers[other].in += value; state.peers[other].inTx++; }
-            // gas accumulation (rough): use gasPrice if present
-            if(tx.gasPrice){ try{ const gp = hexToBig(tx.gasPrice); state.gasSpent += (gp * hexToBig(tx.gas || tx.gasLimit || '0x0')); }catch(_){} }
+            // gas * price if present
+            if(tx.gasPrice){
+              try{
+                const gp = hexToBig(tx.gasPrice); const gu = hexToBig(tx.gas || tx.gasLimit || '0x0');
+                state.gasSpent += (gp * gu);
+              }catch(_){}
+            }
             state.totalNativeTxs++;
             state.firstSeen = Math.min(state.firstSeen, ts);
             state.lastSeen = Math.max(state.lastSeen, ts);
           }
-        });
-      });
-      state.lastScannedBlock = Math.max(state.lastScannedBlock, arr[arr.length-1] ?? state.lastScannedBlock);
-      // progress update
-      const done = state.lastScannedBlock - (genesisMode ? 0 : startBlock) + 1;
-      ui.prog.style.width = Math.min(65, (done / Math.max(1, totalSpan)) * 65).toFixed(1) + '%';
-      // persist
-      await dbPut(key, state);
-      await new Promise(r=>setTimeout(r, 8));
+        }
+        scannedBlocks++;
+      }
+      // update progress
+      ui.prog.style.width = Math.min(65, (scannedBlocks / Math.max(1, totalBlocks)) * 65).toFixed(1) + '%';
+      // tiny sleep to be polite
+      await sleep(6);
     }
   }
 
-  // token/NFT logs (transfer topics)
-  const TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
-  for(let from=0; from<=headBlock; from += LOG_CHUNK){
-    const to = Math.min(headBlock, from + LOG_CHUNK - 1);
+  // logs scan for token transfers (Transfer topic) — aggregated only
+  const TRANSFER_TOPIC = ethers.id("Transfer(address,address,uint256)"); // topic
+  for(let from = 0; from <= endBlock; from += LOG_CHUNK){
+    const to = Math.min(endBlock, from + LOG_CHUNK - 1);
     try{
-      const logs = await getLogs(from, to, [TRANSFER_TOPIC]);
+      const logs = await rpc_getLogs(from, to, [TRANSFER_TOPIC]);
       for(const L of logs){
-        const f = "0x" + L.topics[1].slice(26);
-        const t = "0x" + L.topics[2].slice(26);
-        if(f.toLowerCase() !== address.toLowerCase() && t.toLowerCase() !== address.toLowerCase()) continue;
-        const out = f.toLowerCase() === address.toLowerCase();
+        const f = "0x" + (L.topics?.[1] || '').slice(26);
+        const t = "0x" + (L.topics?.[2] || '').slice(26);
+        if(!f || !t) continue;
+        if(f.toLowerCase() !== addr.toLowerCase() && t.toLowerCase() !== addr.toLowerCase()) continue;
+        const out = f.toLowerCase() === addr.toLowerCase();
         const other = ethers.getAddress(out ? t : f);
-        // get block timestamp quickly
-        const blk = await getBlock(hexToNum(L.blockNumber));
-        const ts = hexToNum(blk.timestamp || '0x0');
-        const d = new Date(ts*1000).toISOString().slice(0,10);
-        state.days[d] ??= {in:0,out:0,count:0};
-        state.days[d].count++;
-        // aggregate (we don't sum amounts for tokens here reliably)
+        // timestamp via block
+        const blk = await rpc_getBlock(Number(L.blockNumber));
+        const ts = Number(blk.timestamp || 0);
+        const dkey = new Date(ts*1000).toISOString().slice(0,10);
+        state.days[dkey] ??= {in:0,out:0,count:0};
+        state.days[dkey].count++;
         state.peers[other] ??= {in:0n,out:0n,inTx:0,outTx:0,isContract:false};
       }
     }catch(e){
-      console.warn('logs chunk error', e.message);
+      console.warn('logs error', e.message || e);
     }
-    ui.prog.style.width = (70 + Math.min(25, (to/headBlock)*25)).toFixed(1) + '%';
-    await dbPut(key, state);
-    await new Promise(r=>setTimeout(r, 20));
+    ui.prog.style.width = (70 + Math.min(25, ((to / Math.max(1,endBlock)) * 25))).toFixed(1) + '%';
+    await sleep(8);
   }
 
-  // label peers as contract or not
+  // label peers as contract or EOA (parallel)
   const peerKeys = Object.keys(state.peers);
-  for(const p of peerKeys){
-    try{
-      const code = await getCode(p);
-      state.peers[p].isContract = (code && code !== '0x');
-    }catch(_){}
-  }
+  await Promise.all(peerKeys.map(async p=>{
+    try{ const code = await rpc_getCode(p); state.peers[p].isContract = (code && code !== '0x'); }catch(_){}
+  }));
 
-  // finalize numbers and UI
+  // finalize metrics
   const totalIn = Number(ethers.formatEther(state.inflow));
   const totalOut = Number(ethers.formatEther(state.outflow));
   const gasEth = Number(ethers.formatEther(state.gasSpent || 0n));
   ui.volume.textContent = `${totalIn.toFixed(5)} / ${totalOut.toFixed(5)} MON`;
   ui.gas.textContent = `${gasEth.toFixed(6)} MON`;
   ui.activeDays.textContent = Object.keys(state.days).length;
-  // compute streak
-  const days = Object.keys(state.days).sort();
   ui.seen.textContent = `${new Date((state.firstSeen===Infinity?Date.now()/1000:state.firstSeen)*1000).toLocaleString()} — ${new Date(state.lastSeen*1000).toLocaleString()}`;
-  ui.prog.style.width = '98%';
-  // streak calculation (consecutive calendar days)
-  let longest = 0, current = 0;
-  if(days.length){
-    const dayNumbers = days.map(d => new Date(d + 'T00:00:00Z').valueOf());
-    let prev = null;
-    for(const dt of dayNumbers){
-      if(prev === null || dt - prev > 86400000){
-        current = 1;
-      } else {
-        current++;
-      }
-      longest = Math.max(longest, current);
-      prev = dt;
-    }
+
+  // compute day streak
+  const dayKeys = Object.keys(state.days).sort();
+  let longest = 0, current = 0, prev = null;
+  for(const d of dayKeys){
+    const t = new Date(d + 'T00:00:00Z').valueOf();
+    if(prev === null || t - prev > 86400000) current = 1; else current++;
+    longest = Math.max(longest, current);
+    prev = t;
   }
   ui.streak.textContent = longest;
+
   // timeline chart
   renderTimeline(state.days);
-  // small counterparty graph
-  renderGraph(address, state);
+  // network graph
+  renderGraph(addr, state);
   ui.prog.style.width = '100%';
 
-  // final persist and set lastReport
-  await dbPut(key, state);
-  window.lastReport = { address, balance: Number(ethers.formatEther(bal)), nonce, stats: state, generatedAt: new Date().toISOString(), rpc:RPC_ORIGIN };
+  // final report export store
+  window.lastReport = { address: addr, balance: Number(ethers.formatEther(balance)), nonce, headBlock, stats: state, generatedAt: new Date().toISOString(), rpc: useProvider.connection?.url || 'wallet-provider' };
 }
 
 /* ---------------- Timeline (Chart.js) ---------------- */
@@ -402,72 +422,87 @@ function renderTimeline(daysObj){
     data: {
       labels,
       datasets: [
-        { label: 'Tx Count', data: txCounts, stack: 'a' },
-        { label: 'Native Volume (MON)', data: inflows, stack: 'b', type: 'line', yAxisID: 'vol' }
+        { label: 'Tx Count', data: txCounts, backgroundColor: 'rgba(100,150,255,0.6)', stack: 'a' },
+        { label: 'Native Volume (MON)', data: inflows, type: 'line', yAxisID: 'vol', tension: 0.25, borderColor: '#6ee7ff', pointRadius: 2 }
       ]
     },
     options: {
       responsive: true,
+      interaction: { mode: 'index', intersect: false },
       scales: {
         x: { ticks: { color: '#bcd6ff' } },
         y: { beginAtZero: true, ticks: { color: '#bcd6ff' } },
-        vol: { position: 'right', beginAtZero: true, ticks: { color: '#bcd6ff' } }
+        vol: { position: 'right', beginAtZero: true, grid: { display: false }, ticks: { color: '#bcd6ff' } }
       },
       plugins: { legend: { labels: { color: '#dfefff' } } }
     }
   });
 }
 
-/* ---------------- Graph (D3) ---------------- */
+/* ---------------- Graph (D3) - Arkham style small version ---------------- */
 function renderGraph(centerAddr, state) {
   const el = document.getElementById('graph'); el.innerHTML = '';
   const width = el.clientWidth || 1000, height = 520;
   const svg = d3.select(el).append('svg').attr('width', width).attr('height', height);
   const nodesMap = new Map();
-  nodesMap.set(centerAddr.toLowerCase(), { id: centerAddr, type: 'self' });
-  Object.entries(state.peers).slice(0, 120).forEach(([addr, info]) => {
-    nodesMap.set(addr.toLowerCase(), { id: addr, type: info.isContract ? 'contract' : 'peer' });
-  });
+  nodesMap.set(centerAddr.toLowerCase(), { id: centerAddr.toLowerCase(), label:centerAddr, type: 'self' });
+  // pick top peers by activity (inTx+outTx) to keep the graph readable
+  const peers = Object.entries(state.peers || {}).map(([addr,info])=>({addr,score:(info.inTx||0)+(info.outTx||0), info})).sort((a,b)=>b.score-a.score).slice(0,140);
+  peers.forEach(p=> nodesMap.set(p.addr.toLowerCase(), { id: p.addr.toLowerCase(), label: p.addr, type: p.info.isContract ? 'contract' : 'peer' }));
   const nodes = Array.from(nodesMap.values());
-  // create simple aggregated links from peers to center (if either direction)
+
+  // build aggregated links: each peer -> center
   const links = [];
-  for(const [k, v] of Object.entries(state.peers)){
-    const id = k.toLowerCase();
-    links.push({ source: id, target: centerAddr.toLowerCase(), value: Number(v.in || 0) + Number(v.out || 0) });
+  for(const n of nodes){
+    if(n.id === centerAddr.toLowerCase()) continue;
+    const info = state.peers[n.id] || {in:0,out:0};
+    const val = (Number(info.in?Number(ethers.formatEther(info.in)):0) + Number(info.out?Number(ethers.formatEther(info.out)):0));
+    links.push({ source: n.id, target: centerAddr.toLowerCase(), value: val || 1 });
   }
+
   const g = svg.append('g');
   svg.call(d3.zoom().scaleExtent([0.3,4]).on('zoom', (e)=> g.attr('transform', e.transform)));
+
   const link = g.append('g').selectAll('line').data(links).enter().append('line')
-    .attr('stroke', d => d.source === centerAddr.toLowerCase() ? '#ff6b6b' : '#23d1a2')
-    .attr('stroke-opacity', .55).attr('stroke-width', d => Math.min(6, 1 + Math.log((d.value||1)+2)));
+    .attr('stroke', d => '#23d1a2')
+    .attr('stroke-opacity', .45).attr('stroke-width', d => Math.min(6, 1 + Math.log((d.value||1)+2)));
+
   const node = g.append('g').selectAll('circle').data(nodes).enter().append('circle')
-    .attr('r', d => d.type==='self'?10:6)
-    .attr('fill', d => d.type==='self' ? '#93c5fd' : (d.type==='contract' ? '#f59e0b' : '#a3b8ff'))
+    .attr('r', d => d.type === 'self' ? 10 : 5.5)
+    .attr('fill', d => d.type === 'self' ? '#93c5fd' : (d.type === 'contract' ? '#f59e0b' : '#a3b8ff'))
     .attr('stroke', '#18263f').attr('stroke-width', 1.2)
-    .call(d3.drag().on('start', (event, d) => { if(!event.active) sim.alphaTarget(0.2).restart(); d.fx = d.x; d.fy = d.y; })
-      .on('drag', (event,d)=> { d.fx = event.x; d.fy = event.y; })
-      .on('end', (event,d)=> { if(!event.active) sim.alphaTarget(0); d.fx = null; d.fy = null; }));
+    .style('cursor','pointer');
+
+  const label = g.append('g').selectAll('text').data(nodes).enter().append('text')
+    .text(d => d.type==='self' ? 'YOU' : (d.label.slice(0,6) + '…' + d.label.slice(-4)))
+    .attr('font-size', 10).attr('fill','#cfe6ff').attr('dx', 8).attr('dy', 4);
+
   const tooltip = d3.select('body').append('div').style('position','fixed').style('pointer-events','none')
     .style('background','#081026cc').style('border','1px solid #21304f').style('padding','8px').style('border-radius','8px').style('color','#dfefff').style('display','none');
+
   node.on('mouseover', (e,d) => {
     const p = state.peers[d.id] || {};
-    tooltip.style('display','block').html(`<div style="font-family:ui-monospace">${short(d.id)}</div><div style="font-size:12px;color:#bcd6ff">${d.type}</div>`);
+    tooltip.style('display','block').html(`<div class="mono">${short(d.id)}</div><div style="font-size:12px;color:#bcd6ff">${d.type}</div>`);
   }).on('mousemove', (e)=> tooltip.style('left',(e.clientX+12)+'px').style('top',(e.clientY+12)+'px'))
-    .on('mouseout', ()=> tooltip.style('display','none'));
+    .on('mouseout', ()=> tooltip.style('display','none'))
+    .on('click', (e,d) => { ui.addr.value = d.id; /* allow click-to-fill for quick checks */ });
+
   const sim = d3.forceSimulation(nodes)
-    .force('link', d3.forceLink(links).id(d=>d.id).distance(100).strength(.8))
+    .force('link', d3.forceLink(links).id(d=>d.id).distance(d=> 90 + Math.min(120, Math.log((d.value||1)+2)*20)).strength(0.8))
     .force('charge', d3.forceManyBody().strength(-220))
     .force('center', d3.forceCenter(width/2, height/2))
-    .alpha(0.9).alphaDecay(0.03)
+    .alpha(0.95).alphaDecay(0.03)
     .on('tick', ()=> {
-      link.attr('x1',d=> (d.source.x)).attr('y1',d=> (d.source.y)).attr('x2',d=> (d.target.x)).attr('y2',d=> (d.target.y));
-      node.attr('cx', d=> d.x).attr('cy', d=> d.y);
+      link.attr('x1',d=>d.source.x).attr('y1',d=>d.source.y).attr('x2',d=>d.target.x).attr('y2',d=>d.target.y);
+      node.attr('cx', d=>d.x).attr('cy', d=>d.y);
+      label.attr('x', d=>d.x).attr('y', d=>d.y);
     });
+
   function short(a){ return a.slice(0,6) + '…' + a.slice(-4); }
 }
 
 /* ---------------- Export handler ---------------- */
-document.getElementById('exportBtn').addEventListener('click', () => {
+ui.export.addEventListener('click', () => {
   if(!window.lastReport){ alert('Run a scan first.'); return; }
   const blob = new Blob([JSON.stringify(window.lastReport, null, 2)], {type:'application/json'});
   const u = URL.createObjectURL(blob);
@@ -475,12 +510,21 @@ document.getElementById('exportBtn').addEventListener('click', () => {
   URL.revokeObjectURL(u);
 });
 
-/* ---------------- Button wiring ---------------- */
-document.getElementById('scanBtn').addEventListener('click', async () => {
-  const addr = ui.addr.value.trim();
+/* ---------------- Scan button wiring ---------------- */
+ui.scan.addEventListener('click', async () => {
+  const input = ui.addr.value.trim();
+  // choose provider: if wallet is connected and input is empty we use walletProvider
+  if(walletProvider && (!input || input === '')) {
+    useProvider = walletProvider;
+    document.getElementById('modeLabel').textContent = 'Connected Wallet (provider)';
+  } else {
+    // manual mode with Ankr
+    useProvider = manualProvider;
+    document.getElementById('modeLabel').textContent = 'Manual RPC (Ankr)';
+  }
   try{
     document.getElementById('prog').style.width = '2%';
-    await scanAddress(addr);
+    await scanAddressFlow(input);
   }catch(err){
     console.error(err);
     alert('Scan failed: ' + (err.message || err));
@@ -491,6 +535,11 @@ document.getElementById('scanBtn').addEventListener('click', async () => {
 /* small util conversions */
 function hexToNum(h){ try{ return parseInt(h,16); }catch(e){return 0;} }
 function hexToBig(h){ try{ return BigInt(h); }catch(e){return 0n;} }
+function short(a){ return a.slice(0,6) + '…' + a.slice(-4); }
+
+/* ---------------- Prefill example (optional) ---------------- */
+// ui.addr.value = '';
+
 </script>
 </body>
 </html>
