@@ -608,6 +608,7 @@
             constructor() {
                 this.rpcUrl = 'https://testnet-rpc.monad.xyz';
                 this.chainId = 10143;
+                this.cache = new Map(); // Cache for consistent data
             }
 
             async makeRpcCall(method, params = []) {
@@ -621,11 +622,19 @@
                             jsonrpc: '2.0',
                             method: method,
                             params: params,
-                            id: 1
+                            id: Date.now()
                         })
                     });
                     
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    
                     const data = await response.json();
+                    if (data.error) {
+                        throw new Error(data.error.message);
+                    }
+                    
                     return data.result;
                 } catch (error) {
                     console.error('RPC call failed:', error);
@@ -635,97 +644,197 @@
 
             async getBalance(address) {
                 const balance = await this.makeRpcCall('eth_getBalance', [address, 'latest']);
+                if (!balance) return 0;
                 return parseInt(balance, 16) / Math.pow(10, 18); // Convert from wei to MON
             }
 
             async getTransactionCount(address) {
                 const count = await this.makeRpcCall('eth_getTransactionCount', [address, 'latest']);
+                if (!count) return 0;
                 return parseInt(count, 16);
             }
 
             async getBlockNumber() {
                 const blockNumber = await this.makeRpcCall('eth_blockNumber');
+                if (!blockNumber) return 0;
                 return parseInt(blockNumber, 16);
             }
 
-            async getBlock(blockNumber) {
+            async getBlock(blockNumber, includeTransactions = false) {
                 const block = await this.makeRpcCall('eth_getBlockByNumber', [
-                    '0x' + blockNumber.toString(16), 
-                    true
+                    typeof blockNumber === 'string' ? blockNumber : '0x' + blockNumber.toString(16), 
+                    includeTransactions
                 ]);
                 return block;
             }
 
-            async analyzeAddress(address) {
-                const balance = await this.getBalance(address);
-                const txCount = await this.getTransactionCount(address);
-                const latestBlock = await this.getBlockNumber();
-                
-                // Generate realistic mock data for demo
-                const transactions = this.generateMockTransactions(address, txCount);
-                const chartData = this.generateChartData(transactions);
-                
-                return {
-                    balance,
-                    txCount,
-                    transactions: transactions.slice(0, 10), // Show recent 10
-                    chartData,
-                    firstActivity: txCount > 0 ? Math.floor(Math.random() * 30) + 1 : 0,
-                    lastActivity: txCount > 0 ? Math.floor(Math.random() * 7) + 1 : 0
-                };
+            async getTransaction(txHash) {
+                const tx = await this.makeRpcCall('eth_getTransactionByHash', [txHash]);
+                return tx;
             }
 
-            generateMockTransactions(address, count) {
+            async getTransactionReceipt(txHash) {
+                const receipt = await this.makeRpcCall('eth_getTransactionReceipt', [txHash]);
+                return receipt;
+            }
+
+            async getRecentBlocks(count = 10) {
+                try {
+                    const latestBlockNumber = await this.getBlockNumber();
+                    const blocks = [];
+                    
+                    for (let i = 0; i < count; i++) {
+                        const blockNumber = latestBlockNumber - i;
+                        if (blockNumber >= 0) {
+                            const block = await this.getBlock(blockNumber, true);
+                            if (block) {
+                                blocks.push(block);
+                            }
+                        }
+                    }
+                    
+                    return blocks;
+                } catch (error) {
+                    console.error('Failed to get recent blocks:', error);
+                    return [];
+                }
+            }
+
+            async findTransactionsForAddress(address, blocks) {
                 const transactions = [];
-                const now = Date.now();
                 
-                for (let i = 0; i < Math.min(count, 50); i++) {
-                    const timestamp = now - (i * Math.random() * 86400000 * 7); // Random within 7 days
-                    transactions.push({
-                        hash: '0x' + Math.random().toString(16).substr(2, 64),
-                        block: Math.floor(Math.random() * 1000000) + 5000000,
-                        timestamp,
-                        from: i % 3 === 0 ? address : this.generateRandomAddress(),
-                        to: i % 3 === 0 ? this.generateRandomAddress() : address,
-                        value: Math.random() * 10,
-                        status: Math.random() > 0.05 ? 'Success' : 'Failed'
-                    });
+                for (const block of blocks) {
+                    if (block && block.transactions) {
+                        for (const tx of block.transactions) {
+                            if (typeof tx === 'object' && tx.from && tx.to) {
+                                const fromAddress = tx.from.toLowerCase();
+                                const toAddress = tx.to ? tx.to.toLowerCase() : '';
+                                const searchAddress = address.toLowerCase();
+                                
+                                if (fromAddress === searchAddress || toAddress === searchAddress) {
+                                    const receipt = await this.getTransactionReceipt(tx.hash);
+                                    const value = tx.value ? parseInt(tx.value, 16) / Math.pow(10, 18) : 0;
+                                    
+                                    transactions.push({
+                                        hash: tx.hash,
+                                        block: parseInt(tx.blockNumber, 16),
+                                        timestamp: parseInt(block.timestamp, 16) * 1000,
+                                        from: tx.from,
+                                        to: tx.to || '0x0000000000000000000000000000000000000000',
+                                        value: value,
+                                        status: receipt && receipt.status === '0x1' ? 'Success' : 'Failed',
+                                        gasUsed: receipt ? parseInt(receipt.gasUsed, 16) : 0,
+                                        gasPrice: tx.gasPrice ? parseInt(tx.gasPrice, 16) : 0
+                                    });
+                                }
+                            }
+                        }
+                    }
                 }
                 
                 return transactions.sort((a, b) => b.timestamp - a.timestamp);
             }
 
-            generateRandomAddress() {
-                return '0x' + Math.random().toString(16).substr(2, 40);
+            async analyzeAddress(address) {
+                const cacheKey = address.toLowerCase();
+                
+                try {
+                    // Get real blockchain data
+                    const [balance, txCount, latestBlockNumber] = await Promise.all([
+                        this.getBalance(address),
+                        this.getTransactionCount(address),
+                        this.getBlockNumber()
+                    ]);
+
+                    // Get recent blocks and find transactions for this address
+                    const recentBlocks = await this.getRecentBlocks(50); // Check last 50 blocks
+                    const transactions = await this.findTransactionsForAddress(address, recentBlocks);
+
+                    // Calculate activity dates
+                    let firstActivity = 0;
+                    let lastActivity = 0;
+                    
+                    if (transactions.length > 0) {
+                        const now = Date.now();
+                        const oldest = Math.min(...transactions.map(tx => tx.timestamp));
+                        const newest = Math.max(...transactions.map(tx => tx.timestamp));
+                        
+                        firstActivity = Math.floor((now - oldest) / (1000 * 60 * 60 * 24));
+                        lastActivity = Math.floor((now - newest) / (1000 * 60 * 60 * 24));
+                    }
+
+                    // Generate chart data from real transactions
+                    const chartData = this.generateRealChartData(transactions, balance);
+
+                    const result = {
+                        balance,
+                        txCount,
+                        transactions: transactions.slice(0, 10), // Show recent 10
+                        chartData,
+                        firstActivity,
+                        lastActivity,
+                        latestBlock: latestBlockNumber
+                    };
+
+                    // Cache the result for consistency
+                    this.cache.set(cacheKey, result);
+                    
+                    return result;
+
+                } catch (error) {
+                    console.error('Analysis failed:', error);
+                    
+                    // If we have cached data, return it
+                    if (this.cache.has(cacheKey)) {
+                        console.log('Returning cached data due to RPC error');
+                        return this.cache.get(cacheKey);
+                    }
+                    
+                    throw error;
+                }
             }
 
-            generateChartData(transactions) {
+            generateRealChartData(transactions, currentBalance) {
                 const days = 30;
                 const data = [];
-                const balanceData = [];
-                let cumulativeBalance = 0;
+                const now = new Date();
                 
+                // Create daily buckets
                 for (let i = days - 1; i >= 0; i--) {
-                    const date = new Date();
+                    const date = new Date(now);
                     date.setDate(date.getDate() - i);
+                    date.setHours(0, 0, 0, 0);
+                    
+                    const nextDay = new Date(date);
+                    nextDay.setDate(nextDay.getDate() + 1);
                     
                     const dayTxs = transactions.filter(tx => {
                         const txDate = new Date(tx.timestamp);
-                        return txDate.toDateString() === date.toDateString();
+                        return txDate >= date && txDate < nextDay;
                     });
-                    
-                    cumulativeBalance += dayTxs.reduce((sum, tx) => sum + tx.value, 0);
                     
                     data.push({
                         date: date.toISOString().split('T')[0],
                         transactions: dayTxs.length,
-                        balance: cumulativeBalance
+                        volume: dayTxs.reduce((sum, tx) => sum + tx.value, 0)
                     });
-                    
-                    balanceData.push(cumulativeBalance);
                 }
                 
-                return { daily: data, balance: balanceData };
+                // Generate balance history (simplified)
+                const balanceHistory = [];
+                let runningBalance = currentBalance;
+                
+                for (let i = 0; i < 30; i++) {
+                    balanceHistory.unshift(runningBalance);
+                    // Simple balance change simulation based on transactions
+                    const change = data[29 - i] ? data[29 - i].volume * 0.1 : 0;
+                    runningBalance = Math.max(0, runningBalance - change);
+                }
+                
+                return { 
+                    daily: data, 
+                    balance: balanceHistory 
+                };
             }
         }
 
@@ -834,7 +943,7 @@
             const address = addressInput.value.trim();
             
             if (!address || !address.match(/^0x[a-fA-F0-9]{40}$/)) {
-                showError('Please enter a valid Ethereum address (0x...)');
+                showError('Please enter a valid MONAD address (0x... 40 characters)');
                 return;
             }
 
@@ -842,26 +951,47 @@
             hideError();
 
             try {
+                console.log('Analyzing address:', address);
                 const data = await analyzer.analyzeAddress(address);
                 
-                // Update statistics
-                document.getElementById('balance').textContent = data.balance.toFixed(4);
-                document.getElementById('txCount').textContent = data.txCount.toLocaleString();
-                document.getElementById('firstTx').textContent = data.firstActivity > 0 ? data.firstActivity : 'N/A';
-                document.getElementById('lastTx').textContent = data.lastActivity > 0 ? data.lastActivity : 'N/A';
+                console.log('Analysis result:', data);
                 
-                // Update charts
+                // Update statistics with real data
+                document.getElementById('balance').textContent = data.balance.toFixed(6);
+                document.getElementById('txCount').textContent = data.txCount.toLocaleString();
+                document.getElementById('firstTx').textContent = data.firstActivity > 0 ? data.firstActivity + ' days' : 'N/A';
+                document.getElementById('lastTx').textContent = data.lastActivity >= 0 ? (data.lastActivity === 0 ? 'Today' : data.lastActivity + ' days') : 'N/A';
+                
+                // Update charts with real data
                 updateCharts(data.chartData, data.balance);
                 
-                // Update transactions table
+                // Update transactions table with real transactions
                 updateTransactionsTable(data.transactions);
+                
+                // Show success message if no transactions found
+                if (data.txCount === 0) {
+                    showInfo('Address found on MONAD testnet but no transactions yet. Balance: ' + data.balance.toFixed(6) + ' MON');
+                }
                 
                 // Show results
                 document.getElementById('results').style.display = 'block';
                 
+                // Scroll to results
+                document.getElementById('results').scrollIntoView({ behavior: 'smooth' });
+                
             } catch (error) {
                 console.error('Analysis failed:', error);
-                showError('Failed to analyze address. Please check the address and try again.');
+                let errorMessage = 'Failed to connect to MONAD testnet. ';
+                
+                if (error.message.includes('HTTP error')) {
+                    errorMessage += 'RPC server is not responding. Please try again later.';
+                } else if (error.message.includes('network')) {
+                    errorMessage += 'Network connection error. Check your internet connection.';
+                } else {
+                    errorMessage += 'Please check the address format and try again.';
+                }
+                
+                showError(errorMessage);
             } finally {
                 showLoading(false);
             }
